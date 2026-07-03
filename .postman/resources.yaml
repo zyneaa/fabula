@@ -1,0 +1,7 @@
+# Use this workspace to collaborate
+workspace:
+  id: 3eb68f0f-7611-4c9c-bd6c-19b12e8c17a2
+
+localResources:
+  docs:
+    - ../plans/EPISODE-0.md

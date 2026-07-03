@@ -1,12 +1,34 @@
-# Episode 0 — Fabula Backend Plan
+# Fabula — Technical Playbook
 
 ## Overview
 
-University-specific AI learning assistant. Two roles: **student**, **teacher**.
-Teachers upload course materials + uni info. Students query uni info + generate study aids.
+University-specific AI learning assistant backend. Two roles: **student**, **teacher**.
+Teachers upload course materials + university info. Students query uni info + generate study aids.
 
-**Stack:** FastAPI, PostgreSQL, SQLAlchemy, Alembic, OpenRouter (pluggable LLM).
-**Audio:** Deferred.
+**Audio:** Deferred to future episode.
+
+---
+
+## Stack
+
+| Layer | Technology | Version |
+|---|---|---|
+| Language | Python | 3.14+ |
+| Web Framework | FastAPI | >=0.110 |
+| ASGI Server | Uvicorn | latest |
+| ORM | SQLAlchemy (async) | 2.x |
+| DB Migrations | Alembic | latest |
+| Database | PostgreSQL | 16 |
+| DB Driver | asyncpg | latest |
+| Auth | JWT (python-jose) + bcrypt (passlib) | — |
+| Rate Limiting | slowapi | latest |
+| LLM Provider | OpenRouter (pluggable) | — |
+| HTTP Client | httpx | latest |
+| File Parsing | PyMuPDF, python-docx, python-pptx | — |
+| Logging | structlog | latest |
+| Settings | pydantic-settings | latest |
+| Testing | pytest + pytest-asyncio | — |
+| Containerization | Docker Compose | — |
 
 ---
 
@@ -147,114 +169,6 @@ fabula/
 
 ---
 
-## Implementation Phases
-
-### Phase 1: Foundation
-**Goal:** Project skeleton, DB, auth working.
-
-1. Init project structure, `requirements.txt` with deps:
-   - `fastapi`, `uvicorn`, `sqlalchemy`, `alembic`, `psycopg2-binary`
-   - `python-jose[cryptography]`, `passlib[bcrypt]`, `python-multipart`
-   - `pydantic-settings`, `slowapi` (rate limiting)
-   - `httpx` (for OpenRouter calls)
-   - `pymupdf` (PDF), `python-docx` (DOCX), `python-pptx` (PPTX)
-2. `config.py` — Pydantic Settings reading `.env` (DB URL, JWT secret, OpenRouter key)
-3. `database.py` — SQLAlchemy async engine + session factory
-4. All models in `app/models/`
-5. Alembic init + initial migration from models
-6. `core/security.py` — JWT creation/verification, password hashing
-7. `api/auth.py` — register, login, me endpoints
-8. `dependencies.py` — `get_db`, `get_current_user`, `require_role`
-9. `core/exceptions.py` — custom HTTP exceptions + handlers
-10. `docker-compose.yml` — Postgres service
-
-**Deliverable:** Can register, login, get JWT, access protected routes.
-
-### Phase 2: Material Management
-**Goal:** Upload, parse, chunk study materials.
-
-1. `services/file_parser.py` — extract text from PDF/DOCX/TXT/PPTX
-2. `services/chunker.py` — split text into chunks (~500 tokens, 50 overlap)
-3. `api/materials.py` — upload (save file, trigger parse+chunk in background), list, get, delete
-4. File storage in `uploads/` dir (organized by user_id)
-5. Material status tracking (pending → processing → ready/failed)
-
-**Deliverable:** Upload any supported file → text extracted → chunks stored.
-
-### Phase 3: LLM Integration
-**Goal:** OpenRouter client, pluggable interface, teacher config.
-
-1. `services/llm.py` — LLM provider interface:
-   ```python
-   class LLMProvider(Protocol):
-       async def complete(self, messages, model, **kwargs) -> str: ...
-       async def stream(self, messages, model, **kwargs) -> AsyncIterator[str]: ...
-   ```
-2. `OpenRouterProvider` impl — httpx calls to OpenRouter API
-3. `api/llm_config.py` — teacher CRUD for model configs
-4. Model selection logic: check LLMConfig → pick active model → fallback to default
-5. `core/rate_limit.py` — slowapi setup:
-   - Auth endpoints: 5/min
-   - LLM generation: 10/min (student), 30/min (teacher)
-   - General: 60/min
-
-**Deliverable:** Teacher configures models. LLM calls work via OpenRouter.
-
-### Phase 4: AI Features
-**Goal:** Notes, quizzes, exam paper generation.
-
-1. **Notes generation** (`services/notes.py`):
-   - Fetch material chunks → build prompt ("Generate comprehensive study notes from:")
-   - Stream LLM response → store as markdown
-   - Background task, status polling via GET endpoint
-
-2. **Quiz generation** (`services/quiz.py`):
-   - Fetch material chunks → prompt ("Generate 10 quiz questions: mix of MCQ and short answer")
-   - Parse LLM JSON response → store structured questions
-   - Include answer key
-
-3. **Exam paper generation** (`services/exam_paper.py`):
-   - Teacher uploads: course materials + previous exam paper
-   - Step 1: Analyze prev exam → extract style profile (question types, difficulty, format, marking scheme)
-   - Step 2: Generate up to 5 new papers using style profile + course material content
-   - Each paper stored separately with paper_number
-   - Background task (can take 30-60s for 5 papers)
-
-**Deliverable:** All 3 AI generation features working via background tasks.
-
-### Phase 5: University Info System
-**Goal:** Teacher-curated knowledge base + student Q&A chat.
-
-1. `api/uni_info.py` — teacher CRUD for uni info entries
-2. `services/uni_info.py` — retrieval logic:
-   - Simple keyword + category matching (no vector DB for now)
-   - Fetch relevant entries → inject into LLM context
-3. `services/chat.py` — student query flow:
-   - Student sends message → search relevant UniInfo entries
-   - Build context: "You are a university assistant. Here is relevant info: {entries}"
-   - LLM generates response → store in conversation
-4. `api/chat.py` — conversation + message endpoints
-
-**Deliverable:** Students can chat about uni info. Teachers populate knowledge base.
-
-### Phase 6: Polish
-**Goal:** Presentable, not prod-ready.
-
-1. CORS middleware config
-2. Request validation error handling (Pydantic v2)
-3. Logging setup (structlog or stdlib)
-4. Basic test suite:
-   - Auth flow tests
-   - Material upload + parse tests
-   - Mock LLM for generation tests
-   - Uni info CRUD tests
-5. `.env.example` with all config vars documented
-6. README with setup instructions
-
-**Deliverable:** Clean, documented, testable backend.
-
----
-
 ## Key Design Decisions
 
 | Decision | Choice | Reason |
@@ -278,6 +192,7 @@ sqlalchemy[asyncio]
 asyncpg
 alembic
 pydantic-settings
+pydantic[email]
 python-jose[cryptography]
 passlib[bcrypt]
 python-multipart
