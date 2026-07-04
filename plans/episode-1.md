@@ -8,7 +8,7 @@ Project skeleton, DB, auth working.
 
 1. Init project structure, `requirements.txt` with deps:
    - `fastapi`, `uvicorn`, `sqlalchemy`, `alembic`, `psycopg2-binary`
-   - `python-jose[cryptography]`, `passlib[bcrypt]`, `python-multipart`
+   - `python-jose[cryptography]`, `passlib[argon]`, `python-multipart`
    - `pydantic-settings`, `slowapi` (rate limiting)
    - `httpx` (for OpenRouter calls)
    - `pymupdf` (PDF), `python-docx` (DOCX), `python-pptx` (PPTX)

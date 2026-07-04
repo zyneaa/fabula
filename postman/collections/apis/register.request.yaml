@@ -1,4 +1,15 @@
 $kind: http-request
-url: ""
-method: GET
+name: register
+url: http://localhost:8000/auth/register
+method: POST
+body:
+  type: json
+  content: |-
+    {
+        "email": "zyne@gmail.com",
+        "password": "zyne123",
+        "name": "zyne",
+        "role": "student",
+        "department": null
+    }
 order: 1783088013423

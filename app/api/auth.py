@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends
-from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,13 +11,24 @@ from app.models.user import User, UserRole
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-
 class RegisterRequest(BaseModel):
     email: EmailStr
-    password: str
-    name: str
+    password: str = Field(min_length=8)
+    name: str = Field(min_length=1, max_length=100)
     role: UserRole
     department: str | None = None
+
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if not any(c.isupper() for c in v) or not any(c.isdigit() for c in v):
+            raise ValueError("must contain uppercase letter and number")
+        return v
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
 
 
 class TokenResponse(BaseModel):
@@ -54,11 +64,11 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     return user
 
 
-@router.post("/login", response_model=TokenResponse)
-async def login(form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == form.username))
+@router.post("/login", response_model=TokenResponse, status_code=200)
+async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == req.email))
     user = result.scalar_one_or_none()
-    if not user or not verify_password(form.password, user.password_hash):
+    if not user or not verify_password(req.password, user.password_hash):
         raise UnauthorizedException("Invalid credentials")
     token = create_access_token({"sub": str(user.id), "role": user.role.value})
     return TokenResponse(access_token=token)

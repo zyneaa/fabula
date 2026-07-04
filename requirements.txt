@@ -6,7 +6,7 @@ alembic
 pydantic-settings
 pydantic[email]
 python-jose[cryptography]
-passlib[bcrypt]
+passlib[argon2]
 python-multipart
 slowapi
 httpx
