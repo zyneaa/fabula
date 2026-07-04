@@ -18,4 +18,4 @@ Upload any supported file → text extracted → chunks stored.
 
 ## Status
 
-**Pending.**
+**Done.**

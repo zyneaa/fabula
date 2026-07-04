@@ -1,0 +1,7 @@
+This is a sample text file for testing the file parser.
+
+It contains multiple paragraphs to verify that the parser correctly reads plain text files.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+
+Testing line breaks and paragraph handling.

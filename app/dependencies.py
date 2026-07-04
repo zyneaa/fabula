@@ -1,9 +1,9 @@
-from fastapi import Depends
+from fastapi import Depends, UploadFile, File
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ForbiddenException, UnauthorizedException
+from app.core.exceptions import ForbiddenException, UnauthorizedException, BadRequestException
 from app.core.security import decode_access_token
 from app.database import get_db
 from app.models.user import User, UserRole
@@ -25,6 +25,12 @@ async def get_current_user(
     if not user:
         raise UnauthorizedException("User not found")
     return user
+
+
+async def get_upload_file(file: UploadFile = File(...)) -> UploadFile:
+    if not file.filename:
+        raise BadRequestException("Filename required")
+    return file
 
 
 def require_role(*roles: UserRole):
