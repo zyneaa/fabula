@@ -1,2 +1,11 @@
 name: Globals
-values: []
+values:
+  - key: email
+    value: test@example.com
+    type: default
+  - key: password
+    value: Test123
+    type: secret
+  - key: name
+    value: Test User
+    type: default

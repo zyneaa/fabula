@@ -6,7 +6,7 @@ body:
   type: json
   content: |-
     {
-        "email": "zyne@gmail.com",
-        "password": "zyne123"
+        "email": "{{email}}",
+        "password": "{{password}}"
     }
 order: 4129612759280593

@@ -6,9 +6,9 @@ body:
   type: json
   content: |-
     {
-        "email": "zyne@gmail.com",
-        "password": "zyne123",
-        "name": "zyne",
+        "email": "{{email}}",
+        "password": "{{password}}",
+        "name": "{{name}}",
         "role": "student",
         "department": null
     }
