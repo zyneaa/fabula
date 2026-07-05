@@ -26,4 +26,4 @@ Teacher configures models. LLM calls work via OpenRouter.
 
 ## Status
 
-**Pending.**
+**Done.**

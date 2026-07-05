@@ -4,8 +4,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.api.auth import router as auth_router
 from app.api.materials import router as materials_router
+from app.api.llm_config import router as llm_config_router
+from app.api.users import router as users_router
+from app.core.rate_limit import setup_rate_limiting
 
 app = FastAPI(title="Fabula", version="0.1.0")
+
+setup_rate_limiting(app)
 
 app.add_middleware(
     CORSMiddleware,
@@ -17,6 +22,8 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(materials_router)
+app.include_router(llm_config_router)
+app.include_router(users_router)
 
 
 @app.get("/health")

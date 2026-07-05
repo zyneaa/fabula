@@ -73,7 +73,7 @@ hurl-login: ## Login and save token
 
 hurl-upload: ## Upload material (usage: make hurl-upload file_path=./test.pdf)
 	@token=$$(cat hurl/token.txt); \
-	hurl --variable access_token=$$token --variable file_path=$(file_path) hurl/upload-material.hurl
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable file_path=$(file_path) hurl/upload-material.hurl
 
 hurl-list: ## List materials
 	@token=$$(cat hurl/token.txt); \
@@ -81,11 +81,38 @@ hurl-list: ## List materials
 
 hurl-get: ## Get material (usage: make hurl-get material_id=1)
 	@token=$$(cat hurl/token.txt); \
-	hurl --variable access_token=$$token --variable material_id=$(material_id) hurl/get-material.hurl
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable material_id=$(material_id) hurl/get-material.hurl
 
 hurl-delete: ## Delete material (usage: make hurl-delete material_id=1)
 	@token=$$(cat hurl/token.txt); \
-	hurl --variable access_token=$$token --variable material_id=$(material_id) hurl/delete-material.hurl
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable material_id=$(material_id) hurl/delete-material.hurl
+
+hurl-create-llm-config: ## Create LLM config
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token hurl/create-llm-config.hurl
+
+hurl-list-llm-configs: ## List LLM configs
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token hurl/list-llm-configs.hurl
+
+hurl-get-llm-config: ## Get LLM config (usage: make hurl-get-llm-config config_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable config_id=$(config_id) hurl/get-llm-config.hurl
+
+hurl-update-llm-config: ## Update LLM config (usage: make hurl-update-llm-config config_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable config_id=$(config_id) hurl/update-llm-config.hurl
+
+hurl-delete-llm-config: ## Delete LLM config (usage: make hurl-delete-llm-config config_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable config_id=$(config_id) hurl/delete-llm-config.hurl
+
+seed-admin: ## Create first admin user (usage: make seed-admin ADMIN_EMAIL=admin@test.com ADMIN_PASSWORD=Admin123 ADMIN_NAME="Admin")
+	ADMIN_EMAIL=$(ADMIN_EMAIL) ADMIN_PASSWORD=$(ADMIN_PASSWORD) ADMIN_NAME=$(ADMIN_NAME) PYTHONPATH=. $(PYTHON) scripts/seed_admin.py
+
+hurl-create-user: ## Create user (usage: make hurl-create-user)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token hurl/create-user.hurl
 
 setup: install db-up ## Initial project setup
 	@echo "Project setup complete!"
