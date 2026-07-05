@@ -49,12 +49,14 @@ async def process_material(material_id: int, file_path: str):
             chunks = chunk_text(text)
 
             for i, chunk in enumerate(chunks):
-                db.add(Chunk(
-                    material_id=material_id,
-                    text=chunk,
-                    chunk_index=i,
-                    token_count=estimate_tokens(chunk),
-                ))
+                db.add(
+                    Chunk(
+                        material_id=material_id,
+                        text=chunk,
+                        chunk_index=i,
+                        token_count=estimate_tokens(chunk),
+                    )
+                )
 
             material.status = MaterialStatus.ready
             await db.commit()
@@ -81,7 +83,9 @@ async def upload_material(
     content = await file.read()
     max_size = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
     if len(content) > max_size:
-        raise BadRequestException(f"File too large (max {settings.MAX_UPLOAD_SIZE_MB}MB)")
+        raise BadRequestException(
+            f"File too large (max {settings.MAX_UPLOAD_SIZE_MB}MB)"
+        )
 
     user_dir = Path(settings.UPLOAD_DIR) / str(user.id)
     user_dir.mkdir(parents=True, exist_ok=True)
@@ -117,7 +121,9 @@ async def list_materials(
     user: User = Depends(get_current_user),
 ):
     result = await db.execute(
-        select(Material).where(Material.user_id == user.id).order_by(Material.uploaded_at.desc())
+        select(Material)
+        .where(Material.user_id == user.id)
+        .order_by(Material.uploaded_at.desc())
     )
     materials = result.scalars().all()
     return [
@@ -146,9 +152,14 @@ async def get_material(
         raise NotFoundException("Material not found")
 
     chunks_result = await db.execute(
-        select(Chunk).where(Chunk.material_id == material_id).order_by(Chunk.chunk_index)
+        select(Chunk)
+        .where(Chunk.material_id == material_id)
+        .order_by(Chunk.chunk_index)
     )
-    chunks = [{"index": c.chunk_index, "text": c.text, "tokens": c.token_count} for c in chunks_result.scalars().all()]
+    chunks = [
+        {"index": c.chunk_index, "text": c.text, "tokens": c.token_count}
+        for c in chunks_result.scalars().all()
+    ]
 
     return MaterialDetailResponse(
         id=material.id,

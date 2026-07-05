@@ -16,4 +16,6 @@ class ExamPaper(Base):
     paper_number: Mapped[int] = mapped_column(Integer)
     content: Mapped[str] = mapped_column(Text)
     style_profile: Mapped[dict | None] = mapped_column(JSON)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

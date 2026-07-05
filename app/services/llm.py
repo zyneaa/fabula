@@ -10,7 +10,9 @@ logger = structlog.get_logger()
 
 class LLMProvider(Protocol):
     async def complete(self, messages: list[dict], model: str, **kwargs) -> str: ...
-    def stream(self, messages: list[dict], model: str, **kwargs) -> AsyncIterator[str]: ...
+    def stream(
+        self, messages: list[dict], model: str, **kwargs
+    ) -> AsyncIterator[str]: ...
 
 
 class OpenRouterProvider:
@@ -43,7 +45,9 @@ class OpenRouterProvider:
         data = response.json()
         return data["choices"][0]["message"]["content"]
 
-    async def stream(self, messages: list[dict], model: str, **kwargs) -> AsyncIterator[str]:
+    async def stream(
+        self, messages: list[dict], model: str, **kwargs
+    ) -> AsyncIterator[str]:
         if not self.api_key:
             raise ValueError("OPENROUTER_API_KEY not configured")
 
@@ -70,6 +74,7 @@ class OpenRouterProvider:
                     if data == "[DONE]":
                         break
                     import json
+
                     chunk = json.loads(data)
                     if chunk["choices"][0].get("delta", {}).get("content"):
                         yield chunk["choices"][0]["delta"]["content"]

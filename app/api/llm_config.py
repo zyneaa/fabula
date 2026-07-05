@@ -171,9 +171,11 @@ async def delete_config(
 
 async def get_active_config(teacher_id: int, db: AsyncSession) -> LLMConfig | None:
     result = await db.execute(
-        select(LLMConfig).where(
+        select(LLMConfig)
+        .where(
             LLMConfig.teacher_id == teacher_id,
             LLMConfig.is_active == True,
-        ).order_by(LLMConfig.created_at.desc())
+        )
+        .order_by(LLMConfig.created_at.desc())
     )
     return result.scalar_one_or_none()

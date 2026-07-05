@@ -31,6 +31,7 @@ def mock_student():
 @pytest.fixture
 def admin_client(mock_db, mock_admin):
     from app.api.users import get_current_user, get_db
+
     app.dependency_overrides[get_db] = lambda: mock_db
     app.dependency_overrides[get_current_user] = lambda: mock_admin
     yield TestClient(app)
@@ -40,6 +41,7 @@ def admin_client(mock_db, mock_admin):
 @pytest.fixture
 def teacher_client(mock_db, mock_teacher):
     from app.api.users import get_current_user, get_db
+
     app.dependency_overrides[get_db] = lambda: mock_db
     app.dependency_overrides[get_current_user] = lambda: mock_teacher
     yield TestClient(app)
@@ -49,6 +51,7 @@ def teacher_client(mock_db, mock_teacher):
 @pytest.fixture
 def student_client(mock_db, mock_student):
     from app.api.users import get_current_user, get_db
+
     app.dependency_overrides[get_db] = lambda: mock_db
     app.dependency_overrides[get_current_user] = lambda: mock_student
     yield TestClient(app)
@@ -69,12 +72,15 @@ def test_admin_can_create_teacher(admin_client, mock_db, mock_admin):
     mock_result.scalar_one_or_none.return_value = None
     mock_db.execute = AsyncMock(return_value=mock_result)
 
-    response = admin_client.post("/users", json={
-        "email": "newteacher@test.com",
-        "password": "Test1234",
-        "name": "New Teacher",
-        "role": "teacher",
-    })
+    response = admin_client.post(
+        "/users",
+        json={
+            "email": "newteacher@test.com",
+            "password": "Test1234",
+            "name": "New Teacher",
+            "role": "teacher",
+        },
+    )
     assert response.status_code == 201
     data = response.json()
     assert data["role"] == "teacher"
@@ -95,12 +101,15 @@ def test_admin_can_create_student(admin_client, mock_db, mock_admin):
     mock_result.scalar_one_or_none.return_value = None
     mock_db.execute = AsyncMock(return_value=mock_result)
 
-    response = admin_client.post("/users", json={
-        "email": "newstudent@test.com",
-        "password": "Test1234",
-        "name": "New Student",
-        "role": "student",
-    })
+    response = admin_client.post(
+        "/users",
+        json={
+            "email": "newstudent@test.com",
+            "password": "Test1234",
+            "name": "New Student",
+            "role": "student",
+        },
+    )
     assert response.status_code == 201
     data = response.json()
     assert data["role"] == "student"
@@ -120,61 +129,77 @@ def test_teacher_can_create_student(teacher_client, mock_db, mock_teacher):
     mock_result.scalar_one_or_none.return_value = None
     mock_db.execute = AsyncMock(return_value=mock_result)
 
-    response = teacher_client.post("/users", json={
-        "email": "student2@test.com",
-        "password": "Test1234",
-        "name": "Student Two",
-        "role": "student",
-    })
+    response = teacher_client.post(
+        "/users",
+        json={
+            "email": "student2@test.com",
+            "password": "Test1234",
+            "name": "Student Two",
+            "role": "student",
+        },
+    )
     assert response.status_code == 201
     data = response.json()
     assert data["role"] == "student"
 
 
 def test_teacher_cannot_create_teacher(teacher_client, mock_db, mock_teacher):
-    response = teacher_client.post("/users", json={
-        "email": "teacher2@test.com",
-        "password": "Test1234",
-        "name": "Teacher Two",
-        "role": "teacher",
-    })
+    response = teacher_client.post(
+        "/users",
+        json={
+            "email": "teacher2@test.com",
+            "password": "Test1234",
+            "name": "Teacher Two",
+            "role": "teacher",
+        },
+    )
     assert response.status_code == 403
     assert "Teachers can only create students" in response.json()["detail"]
 
 
 def test_teacher_cannot_create_admin(teacher_client, mock_db, mock_teacher):
-    response = teacher_client.post("/users", json={
-        "email": "admin2@test.com",
-        "password": "Test1234",
-        "name": "Admin Two",
-        "role": "admin",
-    })
+    response = teacher_client.post(
+        "/users",
+        json={
+            "email": "admin2@test.com",
+            "password": "Test1234",
+            "name": "Admin Two",
+            "role": "admin",
+        },
+    )
     assert response.status_code == 403
     assert "Teachers can only create students" in response.json()["detail"]
 
 
 def test_student_cannot_create_any_user(student_client, mock_db, mock_student):
-    response = student_client.post("/users", json={
-        "email": "anyone@test.com",
-        "password": "Test1234",
-        "name": "Anyone",
-        "role": "student",
-    })
+    response = student_client.post(
+        "/users",
+        json={
+            "email": "anyone@test.com",
+            "password": "Test1234",
+            "name": "Anyone",
+            "role": "student",
+        },
+    )
     assert response.status_code == 403
     assert "Students cannot create users" in response.json()["detail"]
 
 
 def test_unauthenticated_user_cannot_create_user(mock_db):
     from app.api.users import get_db
+
     app.dependency_overrides[get_db] = lambda: mock_db
 
     client = TestClient(app)
-    response = client.post("/users", json={
-        "email": "anyone@test.com",
-        "password": "Test1234",
-        "name": "Anyone",
-        "role": "student",
-    })
+    response = client.post(
+        "/users",
+        json={
+            "email": "anyone@test.com",
+            "password": "Test1234",
+            "name": "Anyone",
+            "role": "student",
+        },
+    )
     assert response.status_code == 401
 
     app.dependency_overrides.clear()
@@ -193,11 +218,14 @@ def test_cannot_create_user_with_existing_email(admin_client, mock_db, mock_admi
     mock_result.scalar_one_or_none.return_value = existing_user
     mock_db.execute = AsyncMock(return_value=mock_result)
 
-    response = admin_client.post("/users", json={
-        "email": "existing@test.com",
-        "password": "Test1234",
-        "name": "Duplicate",
-        "role": "student",
-    })
+    response = admin_client.post(
+        "/users",
+        json={
+            "email": "existing@test.com",
+            "password": "Test1234",
+            "name": "Duplicate",
+            "role": "student",
+        },
+    )
     assert response.status_code == 400
     assert "Email already registered" in response.json()["detail"]

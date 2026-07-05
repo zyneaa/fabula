@@ -16,3 +16,4 @@ python-pptx
 structlog
 pytest
 pytest-asyncio
+ruff

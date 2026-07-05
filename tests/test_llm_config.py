@@ -27,6 +27,7 @@ def mock_student():
 @pytest.fixture
 def client(mock_db, mock_teacher):
     from app.api.llm_config import get_current_user, get_db
+
     app.dependency_overrides[get_db] = lambda: mock_db
     app.dependency_overrides[get_current_user] = lambda: mock_teacher
     yield TestClient(app)
@@ -43,11 +44,14 @@ def test_create_config(client, mock_db, mock_teacher):
 
     mock_db.refresh = mock_refresh
 
-    response = client.post("/llm-configs", json={
-        "model_name": "openai/gpt-4o",
-        "provider": "openrouter",
-        "is_active": True,
-    })
+    response = client.post(
+        "/llm-configs",
+        json={
+            "model_name": "openai/gpt-4o",
+            "provider": "openrouter",
+            "is_active": True,
+        },
+    )
     assert response.status_code == 201
     data = response.json()
     assert data["model_name"] == "openai/gpt-4o"

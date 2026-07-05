@@ -35,7 +35,9 @@ class UserResponse(BaseModel):
 
 @router.post("/login", response_model=TokenResponse, status_code=200)
 @limiter.limit("5/minute")
-async def login(request: Request, req: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(
+    request: Request, req: LoginRequest, db: AsyncSession = Depends(get_db)
+):
     result = await db.execute(select(User).where(User.email == req.email))
     user = result.scalar_one_or_none()
     if not user or not verify_password(req.password, user.password_hash):
