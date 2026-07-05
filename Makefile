@@ -64,6 +64,29 @@ docker-down: ## Stop all docker services
 docker-logs: ## View docker logs
 	docker-compose logs -f
 
+hurl-register: ## Register user via hurl
+	hurl --variables-file hurl/hurl.env hurl/register.hurl
+
+hurl-login: ## Login and save token
+	@hurl --variables-file hurl/hurl.env hurl/login.hurl 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])" > hurl/token.txt
+	@echo "Token saved to hurl/token.txt"
+
+hurl-upload: ## Upload material (usage: make hurl-upload file_path=./test.pdf)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variable access_token=$$token --variable file_path=$(file_path) hurl/upload-material.hurl
+
+hurl-list: ## List materials
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token hurl/list-materials.hurl
+
+hurl-get: ## Get material (usage: make hurl-get material_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variable access_token=$$token --variable material_id=$(material_id) hurl/get-material.hurl
+
+hurl-delete: ## Delete material (usage: make hurl-delete material_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variable access_token=$$token --variable material_id=$(material_id) hurl/delete-material.hurl
+
 setup: install db-up ## Initial project setup
 	@echo "Project setup complete!"
 	@echo "Run 'make run' to start the server"

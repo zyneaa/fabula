@@ -7,6 +7,9 @@ uploads/
 .pytest_cache/
 .DS_Store
 
+# Hurl
+hurl/token.txt
+
 # IDE
 .vscode/
 .idea/

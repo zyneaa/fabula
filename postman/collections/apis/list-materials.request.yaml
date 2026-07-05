@@ -1,0 +1,13 @@
+$kind: http-request
+name: list-materials
+url: http://localhost:8000/materials
+method: GET
+body:
+  type: file
+  content:
+    src: ""
+auth:
+  type: bearer
+  credentials:
+    token: "{{ACCESS_TOKEN}}"
+order: 4129612759280595

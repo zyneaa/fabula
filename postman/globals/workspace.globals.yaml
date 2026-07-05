@@ -9,3 +9,12 @@ values:
   - key: name
     value: Test User
     type: default
+  - key: access_token
+    value: ""
+    type: default
+  - key: material_id
+    value: "1"
+    type: default
+  - key: file_path
+    value: /path/to/test.pdf
+    type: default

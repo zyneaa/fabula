@@ -1,0 +1,12 @@
+name: zyne
+values:
+  - key: NAME
+    value: ''
+  - key: PASSWORD
+    value: ''
+  - key: EMAIL
+    value: ''
+  - key: ACCESS_TOKEN
+    value: ''
+  - key: AUTH_HEADER
+    value: ''
