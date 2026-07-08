@@ -64,11 +64,17 @@ docker-down: ## Stop all docker services
 docker-logs: ## View docker logs
 	docker-compose logs -f
 
-hurl-register: ## Register user via hurl
-	hurl --variables-file hurl/hurl.env hurl/register.hurl
+EMAIL ?= test@example.com
+PASSWORD ?= Test123
+NAME ?= Test User
+ROLE ?= student
 
-hurl-login: ## Login and save token
-	@hurl --variables-file hurl/hurl.env hurl/login.hurl 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])" > hurl/token.txt
+hurl-register: ## Register user (usage: make hurl-register EMAIL=test@test.com PASSWORD=Test123 NAME="Test" ROLE=student)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable email=$(EMAIL) --variable password=$(PASSWORD) --variable name=$(NAME) --variable role=$(ROLE) hurl/register.hurl
+
+hurl-login: ## Login and save token (usage: make hurl-login EMAIL=admin@test.com PASSWORD=Admin123)
+	@hurl --variables-file hurl/hurl.env --variable email=$(EMAIL) --variable password=$(PASSWORD) hurl/login.hurl 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])" > hurl/token.txt
 	@echo "Token saved to hurl/token.txt"
 
 hurl-upload: ## Upload material (usage: make hurl-upload file_path=./test.pdf)
