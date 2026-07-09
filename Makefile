@@ -79,7 +79,7 @@ hurl-login: ## Login and save token (usage: make hurl-login EMAIL=admin@test.com
 
 hurl-upload: ## Upload material (usage: make hurl-upload file_path=./test.pdf)
 	@token=$$(cat hurl/token.txt); \
-	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable file_path=$(file_path) hurl/upload-material.hurl
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable file_path=$(file_path) --file-root . hurl/upload-material.hurl
 
 hurl-list: ## List materials
 	@token=$$(cat hurl/token.txt); \
@@ -112,6 +112,18 @@ hurl-update-llm-config: ## Update LLM config (usage: make hurl-update-llm-config
 hurl-delete-llm-config: ## Delete LLM config (usage: make hurl-delete-llm-config config_id=1)
 	@token=$$(cat hurl/token.txt); \
 	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable config_id=$(config_id) hurl/delete-llm-config.hurl
+
+hurl-assign-llm-config: ## Assign LLM config to student (usage: make hurl-assign-llm-config student_id=1 config_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable student_id=$(student_id) --variable config_id=$(config_id) hurl/assign-llm-config.hurl
+
+hurl-list-student-llm-configs: ## List student's LLM configs (usage: make hurl-list-student-llm-configs student_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable student_id=$(student_id) hurl/list-student-llm-configs.hurl
+
+hurl-remove-llm-config-assignment: ## Remove LLM config assignment (usage: make hurl-remove-llm-config-assignment assignment_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable assignment_id=$(assignment_id) hurl/remove-llm-config-assignment.hurl
 
 seed-admin: ## Create first admin user (usage: make seed-admin ADMIN_EMAIL=admin@test.com ADMIN_PASSWORD=Admin123 ADMIN_NAME="Admin")
 	ADMIN_EMAIL=$(ADMIN_EMAIL) ADMIN_PASSWORD=$(ADMIN_PASSWORD) ADMIN_NAME=$(ADMIN_NAME) PYTHONPATH=. $(PYTHON) scripts/seed_admin.py

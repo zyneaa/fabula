@@ -2,6 +2,7 @@ from typing import Protocol, AsyncIterator
 
 import httpx
 import structlog
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 
@@ -85,3 +86,21 @@ class OpenRouterProvider:
 
 def get_provider() -> LLMProvider:
     return OpenRouterProvider()
+
+
+async def generate_with_student_config(
+    messages: list[dict], student_id: int, db: AsyncSession, **kwargs
+) -> str:
+    from app.api.llm_config import get_student_active_config
+
+    config = await get_student_active_config(student_id, db)
+
+    if config:
+        model = config.model_name
+        if config.max_tokens:
+            kwargs["max_tokens"] = config.max_tokens
+    else:
+        model = settings.DEFAULT_LLM_MODEL
+
+    provider = get_provider()
+    return await provider.complete(messages, model=model, **kwargs)

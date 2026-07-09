@@ -2,8 +2,9 @@ POST {{base_url}}/llm-configs
 Authorization: Bearer {{access_token}}
 Content-Type: application/json
 {
-  "provider": "openrouter",
-  "model_name": "openai/gpt-4o",
+  "name": "Free",
+  "provider": "tencent",
+  "model_name": "tencent/hy3:free",
   "is_active": true,
   "max_tokens": 4000
 }

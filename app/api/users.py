@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import BadRequestException, ForbiddenException
 from app.core.security import hash_password
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_role
 from app.models.user import User, UserRole
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -73,3 +73,27 @@ async def create_user(
     await db.commit()
     await db.refresh(user)
     return user
+
+
+@router.get("", response_model=list[UserResponse])
+async def list_users(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
+):
+    result = await db.execute(select(User).order_by(User.created_at.desc()))
+    users = result.scalars().all()
+    return users
+
+
+@router.get("/students", response_model=list[UserResponse])
+async def list_students(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
+):
+    result = await db.execute(
+        select(User)
+        .where(User.role == UserRole.student)
+        .order_by(User.created_at.desc())
+    )
+    students = result.scalars().all()
+    return students
