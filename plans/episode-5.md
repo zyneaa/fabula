@@ -22,4 +22,4 @@ Students can chat about uni info. Teachers populate knowledge base.
 
 ## Status
 
-**Pending.**
+**Done.**

@@ -29,4 +29,4 @@ All 3 AI generation features working via background tasks.
 
 ## Status
 
-**Pending.**
+**Done.**

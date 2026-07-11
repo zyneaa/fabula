@@ -1,0 +1,58 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+venv
+.venv
+ENV
+.venv/bin
+.venv/pip
+.venv/include
+.venv/lib
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+
+# Docker
+docker-compose.yml
+Dockerfile
+
+# Documentation
+*.md
+docs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads (will be mounted as volume)
+uploads/
+
+# Hurl
+hurl/token.txt
+
+# Postman
+.postman/
+postman/
+
+# Client (has its own Dockerfile)
+client/
+
+# Plans
+plans/

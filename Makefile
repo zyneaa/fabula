@@ -26,11 +26,11 @@ lint: ## Run linter
 format: ## Format code
 	$(PYTHON) -m ruff format app/ tests/
 
-db-up: ## Start database with docker-compose
-	docker-compose up -d db
+db-up: ## Start database with docker compose
+	docker compose up -d db
 
 db-down: ## Stop database
-	docker-compose down
+	docker compose down
 
 db-migrate: ## Create a new migration (usage: make db-migrate msg="description")
 	$(PYTHON) -m alembic revision --autogenerate -m "$(msg)"
@@ -45,8 +45,8 @@ db-history: ## Show migration history
 	$(PYTHON) -m alembic history
 
 db-reset: ## Reset database (drop all and recreate)
-	docker-compose down -v
-	docker-compose up -d db
+	docker compose down -v
+	docker compose up -d db
 	@sleep 2
 	$(PYTHON) -m alembic upgrade head
 
@@ -56,13 +56,44 @@ clean: ## Clean up cache and temporary files
 	rm -rf .pytest_cache
 
 docker-up: ## Start all docker services
-	docker-compose up -d
+	docker compose up -d
 
 docker-down: ## Stop all docker services
-	docker-compose down
+	docker compose down
 
 docker-logs: ## View docker logs
-	docker-compose logs -f
+	docker compose logs -f
+
+docker-build: ## Build all docker images
+	docker compose build
+
+docker-rebuild: ## Rebuild and restart all services
+	docker compose up --build -d
+
+docker-backend-logs: ## View backend logs
+	docker compose logs -f backend
+
+docker-frontend-logs: ## View frontend logs
+	docker compose logs -f frontend
+
+docker-db-logs: ## View database logs
+	docker compose logs -f db
+
+docker-shell-backend: ## Open shell in backend container
+	docker compose exec backend bash
+
+docker-shell-db: ## Open shell in database container
+	docker compose exec db psql -U user -d fabula
+
+docker-migrate: ## Run migrations in Docker
+	docker compose exec backend alembic upgrade head
+
+docker-seed-admin: ## Create admin user in Docker (usage: make docker-seed-admin ADMIN_EMAIL=admin@test.com ADMIN_PASSWORD=Admin123 ADMIN_NAME="Admin")
+	docker compose exec backend env ADMIN_EMAIL=$(ADMIN_EMAIL) ADMIN_PASSWORD=$(ADMIN_PASSWORD) ADMIN_NAME=$(ADMIN_NAME) python scripts/seed_admin.py
+
+docker-reset: ## Reset all Docker data (WARNING: deletes all data)
+	docker compose down -v
+	docker compose up --build -d
 
 EMAIL ?= test@example.com
 PASSWORD ?= Test123
@@ -131,6 +162,111 @@ seed-admin: ## Create first admin user (usage: make seed-admin ADMIN_EMAIL=admin
 hurl-create-user: ## Create user (usage: make hurl-create-user)
 	@token=$$(cat hurl/token.txt); \
 	hurl --variables-file hurl/hurl.env --variable access_token=$$token hurl/create-user.hurl
+
+hurl-get-me: ## Get current user info
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token hurl/get-me.hurl
+
+hurl-list-users: ## List all users
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token hurl/list-users.hurl
+
+hurl-list-students: ## List all students
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token hurl/list-students.hurl
+
+# Notes endpoints
+hurl-generate-notes: ## Generate notes from material (usage: make hurl-generate-notes material_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable material_id=$(material_id) hurl/generate-notes.hurl
+
+hurl-get-notes: ## Get notes for material (usage: make hurl-get-notes material_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable material_id=$(material_id) hurl/get-notes.hurl
+
+hurl-list-notes: ## List all notes
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token hurl/list-notes.hurl
+
+hurl-delete-note: ## Delete note (usage: make hurl-delete-note note_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable note_id=$(note_id) hurl/delete-note.hurl
+
+# Quiz endpoints
+hurl-generate-quiz: ## Generate quiz from material (usage: make hurl-generate-quiz material_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable material_id=$(material_id) hurl/generate-quiz.hurl
+
+hurl-get-quiz: ## Get quiz for material (usage: make hurl-get-quiz material_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable material_id=$(material_id) hurl/get-quiz.hurl
+
+hurl-list-quizzes: ## List all quizzes
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token hurl/list-quizzes.hurl
+
+hurl-delete-quiz: ## Delete quiz (usage: make hurl-delete-quiz quiz_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable quiz_id=$(quiz_id) hurl/delete-quiz.hurl
+
+# Exam paper endpoints
+hurl-generate-exam-papers: ## Generate exam papers (usage: make hurl-generate-exam-papers course_material_id=1 source_exam_id=2 course_id=CS101 num_papers=3)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable course_material_id=$(course_material_id) --variable source_exam_id=$(source_exam_id) --variable course_id=$(course_id) --variable num_papers=$(num_papers) hurl/generate-exam-papers.hurl
+
+hurl-list-exam-papers-by-course: ## List exam papers by course (usage: make hurl-list-exam-papers-by-course course_id=CS101)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable course_id=$(course_id) hurl/list-exam-papers-by-course.hurl
+
+hurl-get-exam-paper: ## Get exam paper (usage: make hurl-get-exam-paper paper_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable paper_id=$(paper_id) hurl/get-exam-paper.hurl
+
+hurl-list-exam-papers: ## List all exam papers
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token hurl/list-exam-papers.hurl
+
+hurl-delete-exam-paper: ## Delete exam paper (usage: make hurl-delete-exam-paper paper_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable paper_id=$(paper_id) hurl/delete-exam-paper.hurl
+
+# Uni Info endpoints
+hurl-uni-info-create: ## Create uni info (usage: make hurl-uni-info-create category=course title="CS101" content="Intro to CS")
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable category=$(category) --variable title=$(title) --variable content=$(content) --variable metadata_json="null" hurl/uni-info-create.hurl
+
+hurl-uni-info-list: ## List all uni info
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token hurl/uni-info-list.hurl
+
+hurl-uni-info-get: ## Get uni info by ID (usage: make hurl-uni-info-get uni_info_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable uni_info_id=$(uni_info_id) hurl/uni-info-get.hurl
+
+hurl-uni-info-update: ## Update uni info (usage: make hurl-uni-info-update uni_info_id=1 category=course title="Updated" content="New content")
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable uni_info_id=$(uni_info_id) --variable category=$(category) --variable title=$(title) --variable content=$(content) --variable metadata_json="null" hurl/uni-info-update.hurl
+
+hurl-uni-info-delete: ## Delete uni info (usage: make hurl-uni-info-delete uni_info_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable uni_info_id=$(uni_info_id) hurl/uni-info-delete.hurl
+
+# Chat endpoints
+hurl-chat-conversation-create: ## Create new chat conversation
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token hurl/chat-conversation-create.hurl
+
+hurl-chat-conversation-list: ## List all chat conversations
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token hurl/chat-conversation-list.hurl
+
+hurl-chat-conversation-get: ## Get conversation with messages (usage: make hurl-chat-conversation-get conversation_id=1)
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable conversation_id=$(conversation_id) hurl/chat-conversation-get.hurl
+
+hurl-chat-query: ## Send query to conversation (usage: make hurl-chat-query conversation_id=1 query="What is CS101?")
+	@token=$$(cat hurl/token.txt); \
+	hurl --variables-file hurl/hurl.env --variable access_token=$$token --variable conversation_id=$(conversation_id) --variable query=$(query) hurl/chat-query.hurl
 
 setup: install db-up ## Initial project setup
 	@echo "Project setup complete!"

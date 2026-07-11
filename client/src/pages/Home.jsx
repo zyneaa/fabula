@@ -13,6 +13,8 @@ export default function Home() {
           <h3>Quick Links:</h3>
           <ul>
             <li><Link to="/materials">Study Materials</Link> - Upload and manage your study materials</li>
+            <li><Link to="/uni-info">University Info</Link> - Browse university information</li>
+            <li><Link to="/chat">Chat Assistant</Link> - Ask questions about university info</li>
             {(user.role === 'teacher' || user.role === 'admin') && (
               <>
                 <li><Link to="/llm-configs">LLM Configurations</Link> - Manage AI model settings</li>

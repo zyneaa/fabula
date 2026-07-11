@@ -18,6 +18,8 @@ export default function Navbar() {
         <div style={{ display: 'flex', gap: '20px' }}>
           <Link to="/" style={{ color: 'white', textDecoration: 'none' }}>Home</Link>
           <Link to="/materials" style={{ color: 'white', textDecoration: 'none' }}>Materials</Link>
+          <Link to="/uni-info" style={{ color: 'white', textDecoration: 'none' }}>Uni Info</Link>
+          <Link to="/chat" style={{ color: 'white', textDecoration: 'none' }}>Chat</Link>
           {(user.role === 'teacher' || user.role === 'admin') && (
             <>
               <Link to="/llm-configs" style={{ color: 'white', textDecoration: 'none' }}>LLM Configs</Link>

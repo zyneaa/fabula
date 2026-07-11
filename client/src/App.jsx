@@ -8,6 +8,8 @@ import Materials from './pages/Materials';
 import LLMConfigs from './pages/LLMConfigs';
 import AssignConfigs from './pages/AssignConfigs';
 import Users from './pages/Users';
+import UniInfo from './pages/UniInfo';
+import Chat from './pages/Chat';
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
@@ -55,6 +57,16 @@ function AppRoutes() {
         <Route path="/users" element={
           <ProtectedRoute roles={['teacher', 'admin']}>
             <Users />
+          </ProtectedRoute>
+        } />
+        <Route path="/uni-info" element={
+          <ProtectedRoute>
+            <UniInfo />
+          </ProtectedRoute>
+        } />
+        <Route path="/chat" element={
+          <ProtectedRoute>
+            <Chat />
           </ProtectedRoute>
         } />
       </Routes>
