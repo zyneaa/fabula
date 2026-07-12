@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 
@@ -12,7 +14,6 @@ export default function UniInfo() {
         category: 'course',
         title: '',
         content: '',
-        metadata_json: null,
     });
     const [error, setError] = useState('');
 
@@ -22,8 +23,8 @@ export default function UniInfo() {
 
     const fetchUniInfo = async () => {
         try {
-            const res = await api.get('/uni-info/');
-            setUniInfo(res.data);
+            const { data } = await api.get('/uni-info/');
+            setUniInfo(data);
         } catch (err) {
             setError('Failed to load university info');
         } finally {
@@ -35,11 +36,9 @@ export default function UniInfo() {
         e.preventDefault();
         setError('');
         try {
-            if (editingId) {
-                await api.put(`/uni-info/${editingId}`, formData);
-            } else {
-                await api.post('/uni-info/', formData);
-            }
+            const method = editingId ? 'put' : 'post';
+            const url = editingId ? `/uni-info/${editingId}` : '/uni-info/';
+            await api[method](url, formData);
             fetchUniInfo();
             resetForm();
         } catch (err) {
@@ -48,18 +47,13 @@ export default function UniInfo() {
     };
 
     const handleEdit = (item) => {
-        setFormData({
-            category: item.category,
-            title: item.title,
-            content: item.content,
-            metadata_json: item.metadata,
-        });
+        setFormData({ category: item.category, title: item.title, content: item.content });
         setEditingId(item.id);
         setShowForm(true);
     };
 
     const handleDelete = async (id) => {
-        if (!confirm('Delete this entry?')) return;
+        if (!confirm('Are you sure you want to delete this entry?')) return;
         try {
             await api.delete(`/uni-info/${id}`);
             fetchUniInfo();
@@ -69,116 +63,70 @@ export default function UniInfo() {
     };
 
     const resetForm = () => {
-        setFormData({
-            category: 'course',
-            title: '',
-            content: '',
-            metadata_json: null,
-        });
+        setFormData({ category: 'course', title: '', content: '' });
         setEditingId(null);
         setShowForm(false);
     };
 
-    if (loading) return <div>Loading...</div>;
+    if (loading) return <p>Loading...</p>;
 
     return (
-        <div style={{ maxWidth: '900px', margin: '50px auto', padding: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h2>University Information</h2>
+        <div className="container">
+            <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h1 className="page-title">University Information</h1>
                 {user?.role !== 'student' && (
-                    <button
-                        onClick={() => setShowForm(!showForm)}
-                        style={{ padding: '10px 20px', cursor: 'pointer', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '5px' }}
-                    >
-                        {showForm ? 'Cancel' : 'Add Entry'}
+                    <button onClick={() => { setShowForm(!showForm); if (showForm) resetForm(); }} className="btn btn-primary" style={{width: 'auto'}}>
+                        {showForm ? 'Cancel' : '+ New Entry'}
                     </button>
                 )}
             </div>
 
-            {error && <div style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}
+            {error && <div className="alert alert-error">{error}</div>}
 
-            {showForm && user?.role !== 'student' && (
-                <form onSubmit={handleSubmit} style={{ marginBottom: '30px', padding: '20px', border: '1px solid #ddd', borderRadius: '5px' }}>
-                    <h3>{editingId ? 'Edit Entry' : 'Add New Entry'}</h3>
-                    <div style={{ marginBottom: '15px' }}>
-                        <label>Category:</label>
-                        <select
-                            value={formData.category}
-                            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                            required
-                            style={{ width: '100%', padding: '8px', marginTop: '5px' }}
-                        >
+            {showForm && (
+                <form onSubmit={handleSubmit} style={{ maxWidth: '600px', marginBottom: 'var(--gutter)' }}>
+                    <div className="form-group">
+                        <label className="form-label">Category</label>
+                        <select value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} required className="form-input">
+                            <option value="course">Course</option>
                             <option value="timetable">Timetable</option>
                             <option value="event">Event</option>
                             <option value="directory">Directory</option>
-                            <option value="course">Course</option>
-                            <option value="metadata">Metadata</option>
                         </select>
                     </div>
-                    <div style={{ marginBottom: '15px' }}>
-                        <label>Title:</label>
-                        <input
-                            type="text"
-                            value={formData.title}
-                            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                            required
-                            style={{ width: '100%', padding: '8px', marginTop: '5px' }}
-                        />
+                    <div className="form-group">
+                        <label className="form-label">Title</label>
+                        <input type="text" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required className="form-input" />
                     </div>
-                    <div style={{ marginBottom: '15px' }}>
-                        <label>Content:</label>
-                        <textarea
-                            value={formData.content}
-                            onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                            required
-                            rows={6}
-                            style={{ width: '100%', padding: '8px', marginTop: '5px' }}
-                        />
+                    <div className="form-group">
+                        <label className="form-label">Content</label>
+                        <textarea value={formData.content} onChange={(e) => setFormData({ ...formData, content: e.target.value })} required rows={5} className="form-input" />
                     </div>
-                    <button type="submit" style={{ padding: '10px 20px', cursor: 'pointer', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '5px' }}>
-                        {editingId ? 'Update' : 'Create'}
-                    </button>
+                    <button type="submit" className="btn btn-primary">{editingId ? 'Update Entry' : 'Create Entry'}</button>
                 </form>
             )}
 
-            {uniInfo.length === 0 ? (
-                <p>No university information available yet.</p>
-            ) : (
-                <div style={{ display: 'grid', gap: '20px' }}>
-                    {uniInfo.map((item) => (
-                        <div key={item.id} style={{ padding: '20px', border: '1px solid #ddd', borderRadius: '5px', backgroundColor: 'white' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '10px' }}>
-                                <div>
-                                    <span style={{ padding: '3px 8px', borderRadius: '3px', backgroundColor: '#e9ecef', fontSize: '12px', textTransform: 'uppercase' }}>
-                                        {item.category}
-                                    </span>
-                                    <h3 style={{ margin: '10px 0 5px 0' }}>{item.title}</h3>
-                                </div>
-                                {user?.role !== 'student' && (
-                                    <div>
-                                        <button
-                                            onClick={() => handleEdit(item)}
-                                            style={{ padding: '5px 10px', cursor: 'pointer', marginRight: '5px', backgroundColor: '#ffc107', border: 'none', borderRadius: '3px' }}
-                                        >
-                                            Edit
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(item.id)}
-                                            style={{ padding: '5px 10px', cursor: 'pointer', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '3px' }}
-                                        >
-                                            Delete
-                                        </button>
-                                    </div>
-                                )}
+            <div className="card-grid">
+                {uniInfo.map((item) => (
+                    <div key={item.id} className="uni-info-card">
+                        <div className="uni-info-card-header">
+                            <div>
+                                <span className="badge badge-secondary">{item.category}</span>
+                                <h3 className="uni-info-card-title">{item.title}</h3>
                             </div>
-                            <p style={{ whiteSpace: 'pre-wrap', color: '#555' }}>{item.content}</p>
-                            <small style={{ color: '#999', marginTop: '10px', display: 'block' }}>
-                                Created: {new Date(item.created_at).toLocaleDateString()}
-                            </small>
+                            {user?.role !== 'student' && (
+                                <div style={{display: 'flex', gap: '8px'}}>
+                                    <button onClick={() => handleEdit(item)} className="btn btn-secondary" style={{width: 'auto', padding: '8px 12px'}}>Edit</button>
+                                    <button onClick={() => handleDelete(item.id)} className="btn btn-secondary" style={{width: 'auto', padding: '8px 12px'}}>Delete</button>
+                                </div>
+                            )}
                         </div>
-                    ))}
-                </div>
-            )}
+                        <div className="uni-info-card-content markdown-content">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.content}</ReactMarkdown>
+                        </div>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }

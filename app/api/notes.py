@@ -15,59 +15,75 @@ router = APIRouter(prefix="/notes", tags=["notes"])
 
 
 async def generate_notes_background(
-    material_id: int, user_id: int, db_session_factory
+    conversation_id: int, user_id: int, db_session_factory
 ):
     """Background task to generate notes."""
     async with db_session_factory() as db:
         try:
-            await generate_notes(material_id, user_id, db)
-            logger.info("Notes generation completed", material_id=material_id)
+            await generate_notes(conversation_id, user_id, db)
+            logger.info("Notes generation completed", conversation_id=conversation_id)
         except Exception as e:
-            logger.error("Notes generation failed", error=str(e), material_id=material_id)
+            logger.error("Notes generation failed", error=str(e), conversation_id=conversation_id)
 
 
-@router.post("/generate/{material_id}", status_code=202)
+@router.post("/generate/conversation/{conversation_id}", status_code=202)
 async def generate_notes_endpoint(
-    material_id: int,
+    conversation_id: int,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate study notes from a material (async)."""
+    """Generate study notes from conversation materials (async)."""
     from app.database import async_session
 
-    # Verify material exists
-    result = await db.execute(
-        select(Note).where(Note.material_id == material_id, Note.user_id == current_user.id)
-    )
-    existing = result.scalar_one_or_none()
-    if existing:
-        return {"message": "Notes already exist", "note_id": existing.id}
-
-    background_tasks.add_task(generate_notes_background, material_id, current_user.id, async_session)
-    return {"message": "Notes generation started", "material_id": material_id}
+    background_tasks.add_task(generate_notes_background, conversation_id, current_user.id, async_session)
+    return {"message": "Notes generation started", "conversation_id": conversation_id}
 
 
-@router.get("/material/{material_id}")
-async def get_notes_by_material(
-    material_id: int,
+@router.get("/conversation/{conversation_id}")
+async def get_notes_by_conversation(
+    conversation_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get notes for a specific material."""
-    result = await db.execute(
-        select(Note).where(Note.material_id == material_id, Note.user_id == current_user.id)
-    )
-    note = result.scalar_one_or_none()
-    if not note:
-        raise NotFoundException("Notes not found")
+    """Get notes for a specific conversation."""
+    # Notes are tied to materials, but we want to get notes for all materials in a conversation
+    from app.models.material import Material
     
-    return {
-        "id": note.id,
-        "material_id": note.material_id,
-        "content": note.content,
-        "created_at": note.created_at.isoformat(),
-    }
+    # Get all materials for this conversation
+    materials_result = await db.execute(
+        select(Material).where(
+            Material.conversation_id == conversation_id,
+            Material.user_id == current_user.id,
+        )
+    )
+    materials = materials_result.scalars().all()
+    
+    if not materials:
+        raise NotFoundException("No materials found for this conversation")
+    
+    # Get notes for any of these materials
+    material_ids = [m.id for m in materials]
+    result = await db.execute(
+        select(Note).where(
+            Note.material_id.in_(material_ids),
+            Note.user_id == current_user.id,
+        ).order_by(Note.created_at.desc())
+    )
+    notes = result.scalars().all()
+    
+    if not notes:
+        raise NotFoundException("No notes found for this conversation")
+    
+    return [
+        {
+            "id": note.id,
+            "material_id": note.material_id,
+            "content": note.content,
+            "created_at": note.created_at.isoformat(),
+        }
+        for note in notes
+    ]
 
 
 @router.get("/{note_id}")

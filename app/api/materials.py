@@ -3,15 +3,16 @@ from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core.exceptions import BadRequestException, NotFoundException
+from app.core.exceptions import BadRequestException, NotFoundException, ForbiddenException
 from app.database import get_db
 from app.dependencies import get_current_user, get_upload_file
 from app.models.material import Chunk, Material, MaterialStatus
 from app.models.user import User
+from app.models.llm_config import StudentLLMConfig, LLMConfig
 from app.services.chunker import chunk_text, estimate_tokens
 from app.services.file_parser import parse_file
 
@@ -49,14 +50,12 @@ async def process_material(material_id: int, file_path: str):
             chunks = chunk_text(text)
 
             for i, chunk in enumerate(chunks):
-                db.add(
-                    Chunk(
-                        material_id=material_id,
-                        text=chunk,
-                        chunk_index=i,
-                        token_count=estimate_tokens(chunk),
-                    )
-                )
+                db.add(Chunk(
+                    material_id=material_id,
+                    text=chunk,
+                    chunk_index=i,
+                    token_count=estimate_tokens(chunk),
+                ))
 
             material.status = MaterialStatus.ready
             await db.commit()
@@ -66,8 +65,9 @@ async def process_material(material_id: int, file_path: str):
             raise
 
 
-@router.post("", response_model=MaterialResponse, status_code=201)
-async def upload_material(
+@router.post("/conversation/{conversation_id}", response_model=MaterialResponse, status_code=201)
+async def upload_material_to_conversation(
+    conversation_id: int,
     background_tasks: BackgroundTasks,
     file: UploadFile = Depends(get_upload_file),
     db: AsyncSession = Depends(get_db),
@@ -80,12 +80,36 @@ async def upload_material(
     if ext not in ALLOWED_TYPES:
         raise BadRequestException(f"Unsupported file type: {ext}")
 
+    # Check if user has an LLM config and get max_materials limit
+    config_result = await db.execute(
+        select(LLMConfig)
+        .join(StudentLLMConfig, StudentLLMConfig.config_id == LLMConfig.id)
+        .where(
+            StudentLLMConfig.student_id == user.id,
+            LLMConfig.is_active == True,
+        )
+        .order_by(StudentLLMConfig.assigned_at.desc())
+    )
+    config = config_result.scalars().first()
+    
+    max_materials = config.max_materials if config else 5
+
+    # Check current material count for this conversation
+    count_result = await db.execute(
+        select(func.count(Material.id)).where(
+            Material.conversation_id == conversation_id,
+            Material.user_id == user.id,
+        )
+    )
+    current_count = count_result.scalar()
+
+    if current_count >= max_materials:
+        raise ForbiddenException(f"Maximum {max_materials} materials allowed per conversation")
+
     content = await file.read()
     max_size = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
     if len(content) > max_size:
-        raise BadRequestException(
-            f"File too large (max {settings.MAX_UPLOAD_SIZE_MB}MB)"
-        )
+        raise BadRequestException(f"File too large (max {settings.MAX_UPLOAD_SIZE_MB}MB)")
 
     user_dir = Path(settings.UPLOAD_DIR) / str(user.id)
     user_dir.mkdir(parents=True, exist_ok=True)
@@ -95,6 +119,7 @@ async def upload_material(
 
     material = Material(
         user_id=user.id,
+        conversation_id=conversation_id,
         title=file.filename,
         file_path=str(file_path),
         file_type=ext[1:],
@@ -115,14 +140,18 @@ async def upload_material(
     )
 
 
-@router.get("", response_model=list[MaterialResponse])
-async def list_materials(
+@router.get("/conversation/{conversation_id}", response_model=list[MaterialResponse])
+async def list_conversation_materials(
+    conversation_id: int,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     result = await db.execute(
         select(Material)
-        .where(Material.user_id == user.id)
+        .where(
+            Material.conversation_id == conversation_id,
+            Material.user_id == user.id,
+        )
         .order_by(Material.uploaded_at.desc())
     )
     materials = result.scalars().all()
@@ -152,14 +181,9 @@ async def get_material(
         raise NotFoundException("Material not found")
 
     chunks_result = await db.execute(
-        select(Chunk)
-        .where(Chunk.material_id == material_id)
-        .order_by(Chunk.chunk_index)
+        select(Chunk).where(Chunk.material_id == material_id).order_by(Chunk.chunk_index)
     )
-    chunks = [
-        {"index": c.chunk_index, "text": c.text, "tokens": c.token_count}
-        for c in chunks_result.scalars().all()
-    ]
+    chunks = [{"index": c.chunk_index, "text": c.text, "tokens": c.token_count} for c in chunks_result.scalars().all()]
 
     return MaterialDetailResponse(
         id=material.id,

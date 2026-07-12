@@ -1,76 +1,78 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import Navbar from './components/Navbar';
-import Home from './pages/Home';
+import WorkspaceLayout from './components/WorkspaceLayout';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import Materials from './pages/Materials';
 import LLMConfigs from './pages/LLMConfigs';
 import AssignConfigs from './pages/AssignConfigs';
 import Users from './pages/Users';
-import UniInfo from './pages/UniInfo';
 import Chat from './pages/Chat';
+import UniInfo from './pages/UniInfo';
 
-function ProtectedRoute({ children, roles }) {
+function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
-  
-  if (loading) return <div>Loading...</div>;
+
+  if (loading) {
+    return (
+      <div className="loading-state">
+        <div className="loading-spinner" />
+        <span>Loading...</span>
+      </div>
+    );
+  }
   if (!user) return <Navigate to="/login" />;
-  if (roles && !roles.includes(user.role)) return <Navigate to="/" />;
-  
+
+  return children;
+}
+
+function RoleRoute({ children, roles }) {
+  const { user } = useAuth();
+  if (roles && !roles.includes(user?.role)) return <Navigate to="/chat" />;
   return children;
 }
 
 function AppRoutes() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="loading-state">
+        <div className="loading-spinner" />
+        <span>Loading...</span>
+      </div>
+    );
+  }
 
   return (
-    <>
-      <Navbar />
-      <Routes>
-        <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
-        <Route path="/register" element={
-          <ProtectedRoute roles={['teacher', 'admin']}>
-            <Register />
-          </ProtectedRoute>
-        } />
-        <Route path="/" element={
+    <Routes>
+      <Route path="/login" element={user ? <Navigate to="/chat" /> : <Login />} />
+      <Route
+        path="/register"
+        element={
           <ProtectedRoute>
-            <Home />
+            <RoleRoute roles={['teacher', 'admin']}>
+              <Register />
+            </RoleRoute>
           </ProtectedRoute>
-        } />
-        <Route path="/materials" element={
+        }
+      />
+
+      <Route path="/" element={<Navigate to="/chat" replace />} />
+
+      <Route
+        element={
           <ProtectedRoute>
-            <Materials />
+            <WorkspaceLayout />
           </ProtectedRoute>
-        } />
-        <Route path="/llm-configs" element={
-          <ProtectedRoute roles={['teacher', 'admin']}>
-            <LLMConfigs />
-          </ProtectedRoute>
-        } />
-        <Route path="/assign-configs" element={
-          <ProtectedRoute roles={['teacher', 'admin']}>
-            <AssignConfigs />
-          </ProtectedRoute>
-        } />
-        <Route path="/users" element={
-          <ProtectedRoute roles={['teacher', 'admin']}>
-            <Users />
-          </ProtectedRoute>
-        } />
-        <Route path="/uni-info" element={
-          <ProtectedRoute>
-            <UniInfo />
-          </ProtectedRoute>
-        } />
-        <Route path="/chat" element={
-          <ProtectedRoute>
-            <Chat />
-          </ProtectedRoute>
-        } />
-      </Routes>
-    </>
+        }
+      >
+        <Route path="/chat" element={<Chat />} />
+        <Route path="/uni-info" element={<RoleRoute roles={['teacher', 'admin']}><UniInfo /></RoleRoute>} />
+        <Route path="/llm-configs" element={<RoleRoute roles={['teacher', 'admin']}><LLMConfigs /></RoleRoute>} />
+        <Route path="/assign-configs" element={<RoleRoute roles={['teacher', 'admin']}><AssignConfigs /></RoleRoute>} />
+        <Route path="/users" element={<RoleRoute roles={['teacher', 'admin']}><Users /></RoleRoute>} />
+      </Route>
+    </Routes>
   );
 }
 

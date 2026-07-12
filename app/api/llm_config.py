@@ -18,6 +18,7 @@ class LLMConfigCreate(BaseModel):
     model_name: str
     is_active: bool = True
     max_tokens: int | None = None
+    max_materials: int = Field(default=5, ge=1, le=50)
     restrictions: dict | None = None
 
 
@@ -29,6 +30,7 @@ class LLMConfigResponse(BaseModel):
     model_name: str
     is_active: bool
     max_tokens: int | None
+    max_materials: int
     restrictions: dict | None
 
 
@@ -36,6 +38,7 @@ class LLMConfigUpdate(BaseModel):
     name: str | None = None
     is_active: bool | None = None
     max_tokens: int | None = None
+    max_materials: int | None = Field(default=None, ge=1, le=50)
     restrictions: dict | None = None
 
 
@@ -66,6 +69,7 @@ async def create_config(
         model_name=req.model_name,
         is_active=req.is_active,
         max_tokens=req.max_tokens,
+        max_materials=req.max_materials,
         restrictions=req.restrictions,
     )
     db.add(config)
@@ -79,6 +83,7 @@ async def create_config(
         model_name=config.model_name,
         is_active=config.is_active,
         max_tokens=config.max_tokens,
+        max_materials=config.max_materials,
         restrictions=config.restrictions,
     )
 
@@ -101,6 +106,7 @@ async def list_configs(
             model_name=c.model_name,
             is_active=c.is_active,
             max_tokens=c.max_tokens,
+            max_materials=c.max_materials,
             restrictions=c.restrictions,
         )
         for c in configs
@@ -130,6 +136,7 @@ async def get_config(
         model_name=config.model_name,
         is_active=config.is_active,
         max_tokens=config.max_tokens,
+        max_materials=config.max_materials,
         restrictions=config.restrictions,
     )
 
@@ -157,6 +164,8 @@ async def update_config(
         config.is_active = req.is_active
     if req.max_tokens is not None:
         config.max_tokens = req.max_tokens
+    if req.max_materials is not None:
+        config.max_materials = req.max_materials
     if req.restrictions is not None:
         config.restrictions = req.restrictions
 
@@ -170,6 +179,7 @@ async def update_config(
         model_name=config.model_name,
         is_active=config.is_active,
         max_tokens=config.max_tokens,
+        max_materials=config.max_materials,
         restrictions=config.restrictions,
     )
 
@@ -263,6 +273,7 @@ async def assign_config_to_student(
             model_name=config.model_name,
             is_active=config.is_active,
             max_tokens=config.max_tokens,
+            max_materials=config.max_materials,
             restrictions=config.restrictions,
         ),
     )
@@ -313,6 +324,7 @@ async def list_student_configs(
                         model_name=config.model_name,
                         is_active=config.is_active,
                         max_tokens=config.max_tokens,
+                        max_materials=config.max_materials,
                         restrictions=config.restrictions,
                     ),
                 )

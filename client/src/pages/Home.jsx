@@ -1,37 +1,44 @@
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 
+const ALL_LINKS = [
+  { to: '/chat', title: 'Chat Assistant', desc: 'Upload materials, ask questions, generate notes and quizzes' },
+  { to: '/materials', title: 'Materials', desc: 'View and manage uploaded materials' },
+  { to: '/uni-info', title: 'University Info', desc: 'Manage university information' },
+];
+
+const TEACHER_LINKS = [
+  { to: '/llm-configs', title: 'LLM Configurations', desc: 'Manage AI model settings' },
+  { to: '/assign-configs', title: 'Assign Configs', desc: 'Assign configs to students' },
+  { to: '/users', title: 'Users', desc: 'View all users' },
+  { to: '/register', title: 'Create User', desc: 'Create new user accounts' },
+];
+
 export default function Home() {
   const { user } = useAuth();
 
+  const links = user && (user.role === 'teacher' || user.role === 'admin')
+    ? [...ALL_LINKS, ...TEACHER_LINKS]
+    : ALL_LINKS;
+
   return (
-    <div style={{ maxWidth: '800px', margin: '50px auto', padding: '20px' }}>
-      <h1>Welcome to Fabula</h1>
-      {user ? (
-        <div>
-          <p>Hello, {user.name}! You are logged in as <strong>{user.role}</strong>.</p>
-          <h3>Quick Links:</h3>
-          <ul>
-            <li><Link to="/materials">Study Materials</Link> - Upload and manage your study materials</li>
-            <li><Link to="/uni-info">University Info</Link> - Browse university information</li>
-            <li><Link to="/chat">Chat Assistant</Link> - Ask questions about university info</li>
-            {(user.role === 'teacher' || user.role === 'admin') && (
-              <>
-                <li><Link to="/llm-configs">LLM Configurations</Link> - Manage AI model settings</li>
-                <li><Link to="/assign-configs">Assign Configs</Link> - Assign configs to students</li>
-                <li><Link to="/users">Users</Link> - View all users</li>
-                <li><Link to="/register">Create User</Link> - Create new user accounts</li>
-              </>
-            )}
-          </ul>
+    <div className="container">
+      <header className="home-header">
+        <h1 className="home-title">Welcome, {user.name}</h1>
+        <p className="home-subtitle">Here are some quick links to get you started.</p>
+      </header>
+
+      <main>
+        <h2 className="home-section-title">Tools &amp; Resources</h2>
+        <div className="quick-links-grid">
+          {links.map((link) => (
+            <Link key={link.to} to={link.to} className="quick-link-card">
+              <h3 className="quick-link-card-title">{link.title}</h3>
+              <p className="quick-link-card-desc">{link.desc}</p>
+            </Link>
+          ))}
         </div>
-      ) : (
-        <div>
-          <p>Please login to continue.</p>
-          <Link to="/login" style={{ marginRight: '10px' }}>Login</Link>
-          <Link to="/register">Register</Link>
-        </div>
-      )}
+      </main>
     </div>
   );
 }

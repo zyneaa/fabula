@@ -15,59 +15,75 @@ router = APIRouter(prefix="/quizzes", tags=["quizzes"])
 
 
 async def generate_quiz_background(
-    material_id: int, user_id: int, db_session_factory
+    conversation_id: int, user_id: int, db_session_factory
 ):
     """Background task to generate quiz."""
     async with db_session_factory() as db:
         try:
-            await generate_quiz(material_id, user_id, db)
-            logger.info("Quiz generation completed", material_id=material_id)
+            await generate_quiz(conversation_id, user_id, db)
+            logger.info("Quiz generation completed", conversation_id=conversation_id)
         except Exception as e:
-            logger.error("Quiz generation failed", error=str(e), material_id=material_id)
+            logger.error("Quiz generation failed", error=str(e), conversation_id=conversation_id)
 
 
-@router.post("/generate/{material_id}", status_code=202)
+@router.post("/generate/conversation/{conversation_id}", status_code=202)
 async def generate_quiz_endpoint(
-    material_id: int,
+    conversation_id: int,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate quiz from a material (async)."""
+    """Generate quiz from conversation materials (async)."""
     from app.database import async_session
 
-    # Check if quiz already exists
-    result = await db.execute(
-        select(Quiz).where(Quiz.material_id == material_id, Quiz.user_id == current_user.id)
-    )
-    existing = result.scalar_one_or_none()
-    if existing:
-        return {"message": "Quiz already exists", "quiz_id": existing.id}
-
-    background_tasks.add_task(generate_quiz_background, material_id, current_user.id, async_session)
-    return {"message": "Quiz generation started", "material_id": material_id}
+    background_tasks.add_task(generate_quiz_background, conversation_id, current_user.id, async_session)
+    return {"message": "Quiz generation started", "conversation_id": conversation_id}
 
 
-@router.get("/material/{material_id}")
-async def get_quiz_by_material(
-    material_id: int,
+@router.get("/conversation/{conversation_id}")
+async def get_quiz_by_conversation(
+    conversation_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get quiz for a specific material."""
-    result = await db.execute(
-        select(Quiz).where(Quiz.material_id == material_id, Quiz.user_id == current_user.id)
-    )
-    quiz = result.scalar_one_or_none()
-    if not quiz:
-        raise NotFoundException("Quiz not found")
+    """Get quiz for a specific conversation."""
+    # Quizzes are tied to materials, but we want to get quizzes for all materials in a conversation
+    from app.models.material import Material
     
-    return {
-        "id": quiz.id,
-        "material_id": quiz.material_id,
-        "questions": quiz.questions,
-        "created_at": quiz.created_at.isoformat(),
-    }
+    # Get all materials for this conversation
+    materials_result = await db.execute(
+        select(Material).where(
+            Material.conversation_id == conversation_id,
+            Material.user_id == current_user.id,
+        )
+    )
+    materials = materials_result.scalars().all()
+    
+    if not materials:
+        raise NotFoundException("No materials found for this conversation")
+    
+    # Get quizzes for any of these materials
+    material_ids = [m.id for m in materials]
+    result = await db.execute(
+        select(Quiz).where(
+            Quiz.material_id.in_(material_ids),
+            Quiz.user_id == current_user.id,
+        ).order_by(Quiz.created_at.desc())
+    )
+    quizzes = result.scalars().all()
+    
+    if not quizzes:
+        raise NotFoundException("No quizzes found for this conversation")
+    
+    return [
+        {
+            "id": quiz.id,
+            "material_id": quiz.material_id,
+            "questions": quiz.questions,
+            "created_at": quiz.created_at.isoformat(),
+        }
+        for quiz in quizzes
+    ]
 
 
 @router.get("/{quiz_id}")

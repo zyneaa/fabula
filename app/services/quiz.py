@@ -3,7 +3,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.material import Chunk, Material
+from app.models.material import Chunk, Material, MaterialStatus
 from app.models.quiz import Quiz
 from app.services.llm import generate_with_student_config
 
@@ -11,31 +11,41 @@ logger = structlog.get_logger()
 
 
 async def generate_quiz(
-    material_id: int, user_id: int, db: AsyncSession
+    conversation_id: int,
+    user_id: int,
+    db: AsyncSession,
 ) -> Quiz:
-    """Generate quiz questions from material chunks using LLM."""
+    """Generate quiz questions from conversation materials using LLM."""
     
-    # Fetch material
+    # Fetch ready materials for this conversation
     result = await db.execute(
-        select(Material).where(Material.id == material_id)
+        select(Material).where(
+            Material.conversation_id == conversation_id,
+            Material.user_id == user_id,
+            Material.status == MaterialStatus.ready,
+        )
     )
-    material = result.scalar_one_or_none()
-    if not material:
-        raise ValueError(f"Material {material_id} not found")
+    materials = result.scalars().all()
     
-    # Fetch chunks
-    result = await db.execute(
-        select(Chunk)
-        .where(Chunk.material_id == material_id)
-        .order_by(Chunk.chunk_index)
-    )
-    chunks = result.scalars().all()
+    if not materials:
+        raise ValueError(f"No ready materials found for conversation {conversation_id}")
     
-    if not chunks:
-        raise ValueError(f"No chunks found for material {material_id}")
+    # Fetch all chunks from all materials
+    all_chunks = []
+    for material in materials:
+        result = await db.execute(
+            select(Chunk)
+            .where(Chunk.material_id == material.id)
+            .order_by(Chunk.chunk_index)
+        )
+        chunks = result.scalars().all()
+        all_chunks.extend(chunks)
+    
+    if not all_chunks:
+        raise ValueError(f"No chunks found for materials in conversation {conversation_id}")
     
     # Combine chunks into content
-    content = "\n\n".join([chunk.text for chunk in chunks])
+    content = "\n\n".join([chunk.text for chunk in all_chunks])
     
     # Generate quiz using LLM
     messages = [
@@ -88,18 +98,23 @@ Ensure the JSON is valid and properly formatted.""",
         logger.error("Failed to parse quiz JSON", error=str(e), response=response)
         raise ValueError(f"Failed to parse quiz response: {str(e)}")
     
-    # Save to database
-    quiz = Quiz(material_id=material_id, user_id=user_id, questions=quiz_data)
+    # Save to database (quiz is tied to conversation, not individual material)
+    quiz = Quiz(
+        material_id=materials[0].id,
+        user_id=user_id,
+        questions=quiz_data,
+    )
     db.add(quiz)
     await db.commit()
     await db.refresh(quiz)
     
     logger.info(
         "Generated quiz",
-        material_id=material_id,
+        conversation_id=conversation_id,
         user_id=user_id,
         quiz_id=quiz.id,
         question_count=len(quiz_data.get("questions", [])),
+        material_count=len(materials),
     )
     
     return quiz

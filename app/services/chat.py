@@ -2,7 +2,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.chat import Conversation, Message, MessageRole
-from app.services.uni_info import get_relevant_context
+from app.models.material import Material, Chunk, MaterialStatus
+from app.models.uni_info import UniInfo
 from app.services.llm import generate_with_student_config
 
 
@@ -77,6 +78,74 @@ async def get_conversation_messages(
     return list(result.scalars().all())
 
 
+async def get_conversation_context(
+    conversation_id: int,
+    user_id: int,
+    query: str,
+    db: AsyncSession,
+) -> str:
+    """
+    Build context from conversation materials and university info.
+    """
+    context_parts = []
+    
+    # Get materials for this conversation
+    materials_result = await db.execute(
+        select(Material).where(
+            Material.conversation_id == conversation_id,
+            Material.user_id == user_id,
+            Material.status == MaterialStatus.ready,
+        )
+    )
+    materials = materials_result.scalars().all()
+    
+    if materials:
+        context_parts.append("=== CONVERSATION MATERIALS ===")
+        for material in materials:
+            # Get chunks for this material
+            chunks_result = await db.execute(
+                select(Chunk)
+                .where(Chunk.material_id == material.id)
+                .order_by(Chunk.chunk_index)
+            )
+            chunks = chunks_result.scalars().all()
+            
+            if chunks:
+                context_parts.append(f"\n--- {material.title} ---")
+                for chunk in chunks:
+                    context_parts.append(chunk.text)
+    
+    # Search for relevant university info based on query
+    keywords = [word.lower() for word in query.split() if len(word) > 2]
+    if keywords:
+        from sqlalchemy import or_
+        
+        conditions = []
+        for keyword in keywords:
+            conditions.append(UniInfo.title.ilike(f"%{keyword}%"))
+            conditions.append(UniInfo.content.ilike(f"%{keyword}%"))
+        
+        if conditions:
+            uni_info_result = await db.execute(
+                select(UniInfo)
+                .where(or_(*conditions))
+                .order_by(UniInfo.created_at.desc())
+                .limit(5)
+            )
+            uni_info_entries = uni_info_result.scalars().all()
+            
+            if uni_info_entries:
+                context_parts.append("\n\n=== UNIVERSITY INFORMATION ===")
+                for entry in uni_info_entries:
+                    context_parts.append(f"\n[{entry.category.value.upper()}] {entry.title}")
+                    context_parts.append(entry.content)
+    
+    if not context_parts:
+        return "No relevant materials or university information found."
+    
+    return "\n".join(context_parts)
+
+
 async def process_student_query(
     conversation_id: int,
     user_id: int,
@@ -86,8 +155,8 @@ async def process_student_query(
     """
     Process a student's query:
     1. Add user message to conversation
-    2. Search for relevant uni info
-    3. Build context and send to LLM
+    2. Build context from materials and uni info
+    3. Send to LLM with context
     4. Add assistant response to conversation
     5. Return the assistant message
     """
@@ -99,13 +168,13 @@ async def process_student_query(
         db=db,
     )
     
-    # Get relevant context from uni info
-    context = await get_relevant_context(query, db)
+    # Get context from materials and uni info
+    context = await get_conversation_context(conversation_id, user_id, query, db)
     
     # Build messages for LLM
-    system_prompt = """You are a helpful university assistant. Use the following university information to answer the student's question. If the information doesn't contain the answer, say so honestly.
+    system_prompt = """You are a helpful educational assistant. Use the following context to answer the student's question. If the context doesn't contain the answer, say so honestly. Be concise and helpful.
 
-Relevant University Information:
+Context:
 {context}"""
     
     messages = [

@@ -12,6 +12,7 @@ class UniInfoCategory(str, enum.Enum):
     event = "event"
     directory = "directory"
     course = "course"
+    metadata = "metadata"
 
 
 class UniInfo(Base):

@@ -31,68 +31,91 @@ export default function Register() {
     }
   };
 
-  return (
-    <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px' }}>
-      <h2>{user ? 'Create User' : 'Register'}</h2>
-      {error && <div style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: '15px' }}>
-          <label>Email:</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            style={{ width: '100%', padding: '8px', marginTop: '5px' }}
-          />
-        </div>
-        <div style={{ marginBottom: '15px' }}>
-          <label>Password:</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={8}
-            style={{ width: '100%', padding: '8px', marginTop: '5px' }}
-          />
-          <small style={{ color: '#666' }}>Must contain uppercase letter and number</small>
-        </div>
-        <div style={{ marginBottom: '15px' }}>
-          <label>Name:</label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            style={{ width: '100%', padding: '8px', marginTop: '5px' }}
-          />
-        </div>
-        <div style={{ marginBottom: '15px' }}>
-          <label>Role:</label>
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            style={{ width: '100%', padding: '8px', marginTop: '5px' }}
-          >
-            <option value="student">Student</option>
-            <option value="teacher">Teacher</option>
-            {user?.role === 'admin' && <option value="admin">Admin</option>}
-          </select>
-        </div>
-        <button
-          type="submit"
-          disabled={loading}
-          style={{ width: '100%', padding: '10px', cursor: 'pointer' }}
+  const formFields = (
+    <>
+      <div className="form-group">
+        <label className="form-label" htmlFor="name">Name</label>
+        <input
+          id="name"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+          className="form-input"
+          placeholder="Full name"
+        />
+      </div>
+      <div className="form-group">
+        <label className="form-label" htmlFor="email">Email</label>
+        <input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          className="form-input"
+          placeholder="you@university.edu"
+        />
+      </div>
+      <div className="form-group">
+        <label className="form-label" htmlFor="password">Password</label>
+        <input
+          id="password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          minLength={8}
+          className="form-input"
+          placeholder="••••••••"
+        />
+      </div>
+      <div className="form-group">
+        <label className="form-label" htmlFor="role">Role</label>
+        <select
+          id="role"
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+          className="form-input"
         >
-          {loading ? 'Creating...' : user ? 'Create User' : 'Register'}
-        </button>
-      </form>
-      {!user && (
-        <p style={{ marginTop: '15px', textAlign: 'center' }}>
+          <option value="student">Student</option>
+          <option value="teacher">Teacher</option>
+          {user?.role === 'admin' && <option value="admin">Admin</option>}
+        </select>
+      </div>
+      <button type="submit" disabled={loading} className="btn btn-primary">
+        {loading ? 'Creating...' : user ? 'Create User' : 'Create Account'}
+      </button>
+    </>
+  );
+
+  if (user) {
+    return (
+      <div className="container">
+        <div className="page-header">
+          <h1 className="page-title">Create New User</h1>
+        </div>
+        {error && <div className="alert alert-error">{error}</div>}
+        <form onSubmit={handleSubmit} style={{ maxWidth: '600px' }}>
+          {formFields}
+        </form>
+      </div>
+    );
+  }
+
+  return (
+    <div className="auth-container">
+      <div className="auth-card">
+        <div className="auth-header">
+          <h2 className="auth-title">Create Account</h2>
+          <p className="auth-subtitle">Join Fabula to get started</p>
+        </div>
+        {error && <div className="alert alert-error">{error}</div>}
+        <form onSubmit={handleSubmit}>{formFields}</form>
+        <p style={{ marginTop: 'var(--gutter)', textAlign: 'center' }}>
           Already have an account? <Link to="/login">Login</Link>
         </p>
-      )}
+      </div>
     </div>
   );
 }

@@ -16,6 +16,7 @@ class LLMConfig(Base):
     model_name: Mapped[str] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     max_tokens: Mapped[int | None] = mapped_column(Integer)
+    max_materials: Mapped[int] = mapped_column(Integer, default=5)
     restrictions: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

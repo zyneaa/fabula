@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Lumina AI - Intelligent Architect Chat</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+                  "on-secondary": "#ffffff",
+                  "primary-fixed": "#e1dfff",
+                  "tertiary": "#705d00",
+                  "tertiary-fixed-dim": "#e1c557",
+                  "on-secondary-fixed-variant": "#474646",
+                  "inverse-on-surface": "#eff1f5",
+                  "on-secondary-fixed": "#1c1b1b",
+                  "secondary-container": "#e5e2e1",
+                  "text-muted": "#6B7280",
+                  "surface-container": "#edeef2",
+                  "secondary": "#5f5e5e",
+                  "surface-bright": "#f8f9fd",
+                  "on-tertiary": "#ffffff",
+                  "secondary-fixed": "#e5e2e1",
+                  "surface-container-lowest": "#ffffff",
+                  "inverse-surface": "#2e3134",
+                  "border-subtle": "#E5E7EB",
+                  "on-error": "#ffffff",
+                  "primary-container": "#a5a6f6",
+                  "on-primary-fixed-variant": "#3d3e87",
+                  "on-tertiary-fixed": "#221b00",
+                  "inverse-primary": "#c1c1ff",
+                  "primary": "#5557a0",
+                  "on-background": "#191c1f",
+                  "secondary-fixed-dim": "#c9c6c5",
+                  "outline-variant": "#c7c5d2",
+                  "surface-dim": "#d9dade",
+                  "primary-fixed-dim": "#c1c1ff",
+                  "on-surface": "#191c1f",
+                  "outline": "#777682",
+                  "background": "#f8f9fd",
+                  "surface": "#f8f9fd",
+                  "on-tertiary-fixed-variant": "#544600",
+                  "surface-container-highest": "#e1e2e6",
+                  "surface-card": "#FFFFFF",
+                  "on-surface-variant": "#464650",
+                  "surface-tint": "#5557a0",
+                  "on-error-container": "#93000a",
+                  "surface-variant": "#e1e2e6",
+                  "tertiary-fixed": "#fee170",
+                  "surface-container-high": "#e7e8ec",
+                  "on-secondary-container": "#656464",
+                  "error": "#ba1a1a",
+                  "tertiary-container": "#c6ac41",
+                  "on-primary-fixed": "#0f0d5a",
+                  "surface-container-low": "#f2f3f7",
+                  "on-primary": "#ffffff",
+                  "on-primary-container": "#383881",
+                  "on-tertiary-container": "#4e4000",
+                  "error-container": "#ffdad6"
+          },
+          "borderRadius": {
+                  "DEFAULT": "0.25rem",
+                  "lg": "0.5rem",
+                  "xl": "0.75rem",
+                  "full": "9999px"
+          },
+          "spacing": {
+                  "container-max": "1280px",
+                  "baseline": "4px",
+                  "sidebar-width": "280px",
+                  "margin-mobile": "16px",
+                  "margin-desktop": "40px",
+                  "gutter": "24px"
+          },
+          "fontFamily": {
+                  "body-md": ["Inter"],
+                  "display-lg": ["Hanken Grotesk"],
+                  "label-md": ["JetBrains Mono"],
+                  "headline-md": ["Hanken Grotesk"],
+                  "body-sm": ["Inter"],
+                  "label-sm": ["JetBrains Mono"],
+                  "headline-lg": ["Hanken Grotesk"],
+                  "body-lg": ["Inter"]
+          },
+          "fontSize": {
+                  "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                  "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                  "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                  "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                  "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                  "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                  "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                  "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      display: inline-block;
+      line-height: 1;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #e1e2e6;
+      border-radius: 10px;
+    }
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .ai-gradient-border {
+      position: relative;
+      background: #f8f9fd;
+      border-radius: 0.75rem;
+    }
+    .ai-gradient-border::before {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      border-radius: 0.8rem;
+      padding: 1px;
+      background: linear-gradient(to right, #a5a6f6, transparent, #a5a6f6);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="bg-surface text-on-surface font-body-md selection:bg-primary-container">
+<!-- SideNavBar Anchor -->
+<aside class="h-screen w-sidebar-width fixed left-0 top-0 bg-surface flex flex-col py-baseline px-gutter z-50">
+<div class="mb-10 mt-4">
+<h1 class="font-headline-md text-headline-md font-bold text-primary">Intelligent Architect</h1>
+<p class="font-body-sm text-on-surface-variant opacity-70">Knowledge Workspace</p>
+</div>
+<button class="mb-8 flex items-center justify-center gap-2 bg-primary text-on-primary py-3 px-4 rounded-xl font-body-md font-bold hover:opacity-90 active:scale-[0.98] transition-all">
+<span class="material-symbols-outlined">add</span>
+      New Note
+    </button>
+<nav class="flex-1 space-y-2">
+<!-- Dashboard -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-lowest transition-colors group" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span>Dashboard</span>
+</a>
+<!-- My Notes -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-lowest transition-colors group" href="#">
+<span class="material-symbols-outlined">description</span>
+<span>My Notes</span>
+</a>
+<!-- AI Chat (ACTIVE) -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary font-bold border-l-4 border-primary bg-surface-container-low transition-colors group" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+<span>AI Chat</span>
+</a>
+<!-- Library -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-lowest transition-colors group" href="#">
+<span class="material-symbols-outlined">book</span>
+<span>Library</span>
+</a>
+<!-- Settings -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-lowest transition-colors group" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+<div class="mt-auto pt-4 border-t border-outline-variant flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a person with a serene expression, studio lighting, soft shadows, high-key background. Minimalist aesthetic with focus on clarity and professionalism." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBimiMT1cRtYfh-wY7iGOrD2MbTwx7aFXa4SxCIP7ERt8wMGLI3nOmBZWegtlxcUIyi9k9PE6I3DF_D5puhXTZwWMLrKUzpovgLuJji0pmDZAdO6wVqpcNGYweDf8oPASTIx5CZuYeWx1sKu6qvpE2ZtaXIsmt8Tg9R51ojWK8cK_1JP110MpMtCGQ4bf6AHKsjxpXjZrKCgx5iS4K3bzECWqc--RG3GVUV_jcmC_GGRQqaPXIIoWgxCL7iGwwaVc3TvGr5ywDcxjI"/>
+</div>
+<div>
+<p class="font-label-md text-on-surface font-bold">Alex Rivera</p>
+<p class="font-label-sm text-on-surface-variant">Pro Researcher</p>
+</div>
+</div>
+</aside>
+<!-- TopNavBar Anchor -->
+<header class="fixed top-0 right-0 w-[calc(100%-280px)] h-16 bg-surface-bright flex justify-between items-center px-margin-desktop z-40 border-b border-outline-variant">
+<div class="flex items-center gap-6">
+<div class="relative w-80">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant scale-75">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-low border-none rounded-full font-label-md focus:ring-1 focus:ring-primary" placeholder="Search knowledge..." type="text"/>
+</div>
+<div class="flex gap-4">
+<a class="font-label-md text-on-surface-variant hover:text-primary transition-all" href="#">Recent</a>
+<a class="font-label-md text-on-surface-variant hover:text-primary transition-all" href="#">Shared</a>
+<a class="font-label-md text-on-surface-variant hover:text-primary transition-all" href="#">Starred</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="bg-primary-container text-on-primary-container px-4 py-1.5 rounded-full font-label-md hover:opacity-80 transition-opacity">
+        Upload
+      </button>
+<button class="text-on-surface-variant hover:text-primary transition-all">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-all">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+</div>
+</header>
+<!-- Main Layout -->
+<main class="ml-[280px] pt-16 h-screen flex overflow-hidden">
+<!-- Chat History List -->
+<section class="w-72 border-r border-outline-variant bg-surface flex flex-col">
+<div class="p-6 border-b border-outline-variant">
+<h2 class="font-headline-md text-body-lg font-bold text-on-surface">Chat History</h2>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+<div class="p-3 rounded-lg bg-surface-container-low border-l-2 border-primary">
+<p class="font-body-sm font-bold text-on-surface truncate">Neural Architecture Review</p>
+<p class="font-label-sm text-on-surface-variant">2 mins ago</p>
+</div>
+<div class="p-3 rounded-lg hover:bg-surface-container-lowest transition-colors cursor-pointer">
+<p class="font-body-sm text-on-surface truncate">Philosophy of Ethics Notes</p>
+<p class="font-label-sm text-on-surface-variant">Yesterday</p>
+</div>
+<div class="p-3 rounded-lg hover:bg-surface-container-lowest transition-colors cursor-pointer">
+<p class="font-body-sm text-on-surface truncate">Project Phoenix Roadmap</p>
+<p class="font-label-sm text-on-surface-variant">3 days ago</p>
+</div>
+<div class="p-3 rounded-lg hover:bg-surface-container-lowest transition-colors cursor-pointer">
+<p class="font-body-sm text-on-surface truncate">Deep Learning Citations</p>
+<p class="font-label-sm text-on-surface-variant">Last week</p>
+</div>
+</div>
+</section>
+<!-- Chat Area (Center) -->
+<section class="flex-1 flex flex-col bg-surface-bright relative">
+<!-- Chat Header -->
+<div class="px-8 py-4 bg-surface border-b border-outline-variant flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="p-2 bg-primary-container rounded-lg text-on-primary-container">
+<span class="material-symbols-outlined">cloud_upload</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-on-surface-variant uppercase tracking-wider">Context Source</span>
+<div class="flex gap-2 items-center">
+<span class="bg-surface-container-highest px-3 py-1 rounded text-label-sm text-on-surface border border-outline-variant flex items-center gap-1">
+                Lecture1.pdf <span class="material-symbols-outlined text-[14px]">close</span>
+</span>
+<span class="bg-surface-container-highest px-3 py-1 rounded text-label-sm text-on-surface border border-outline-variant flex items-center gap-1">
+                ResearchNote.txt <span class="material-symbols-outlined text-[14px]">close</span>
+</span>
+<button class="text-primary font-label-sm hover:underline">+ Add more</button>
+</div>
+</div>
+</div>
+<button class="flex items-center gap-1 text-on-surface-variant hover:text-on-surface font-label-md">
+<span class="material-symbols-outlined">tune</span>
+          Settings
+        </button>
+</div>
+<!-- Messages -->
+<div class="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-8 max-w-4xl mx-auto w-full">
+<!-- User Message -->
+<div class="flex flex-col items-end">
+<div class="max-w-[80%] bg-surface-container-highest text-on-surface p-4 rounded-2xl rounded-tr-none shadow-sm">
+<p class="font-body-md">Can you explain the difference between the proposed multi-head attention mechanism in 'Lecture1.pdf' compared to the standard transformer architecture mentioned in my notes?</p>
+</div>
+<span class="font-label-sm text-on-surface-variant mt-2">10:42 AM</span>
+</div>
+<!-- AI Message -->
+<div class="flex flex-col items-start">
+<div class="flex items-center gap-3 mb-2">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+</div>
+<span class="font-label-md font-bold text-primary">Lumina AI</span>
+</div>
+<div class="max-w-[85%] bg-white text-on-surface p-6 rounded-2xl rounded-tl-none shadow-sm border border-outline-variant leading-relaxed">
+<p class="font-body-md mb-4">Based on <span class="font-label-sm px-1.5 py-0.5 bg-secondary-container rounded text-on-secondary-container border border-outline-variant cursor-help" title="Lecture1.pdf, Page 12">Source 1</span>, the proposed mechanism introduces a **Dynamic Sparse Mask**. </p>
+<p class="font-body-md mb-4">Unlike the standard Transformer which computes dense global attention, this sparse approach reduces computational complexity from <code class="font-label-sm bg-surface-container-low px-1 rounded">O(n²)</code> to <code class="font-label-sm bg-surface-container-low px-1 rounded">O(n log n)</code> by only focusing on specific clusters of tokens.</p>
+<div class="mt-4 p-3 bg-surface-container-low rounded-lg border-l-4 border-primary italic text-on-surface-variant font-body-sm">
+              "The shift toward sparsity allows for context windows up to 128k tokens without linear hardware degradation." — ResearchNote.txt
+            </div>
+</div>
+<div class="flex gap-4 mt-3">
+<button class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-all font-label-sm">
+<span class="material-symbols-outlined text-[16px]">thumb_up</span> Helpful
+            </button>
+<button class="flex items-center gap-1 text-on-surface-variant hover:text-error transition-all font-label-sm">
+<span class="material-symbols-outlined text-[16px]">thumb_down</span>
+</button>
+<button class="flex items-center gap-1 text-on-surface-variant hover:text-primary transition-all font-label-sm">
+<span class="material-symbols-outlined text-[16px]">content_copy</span> Copy
+            </button>
+</div>
+</div>
+</div>
+<!-- Input Area -->
+<div class="px-8 pb-8 pt-4">
+<div class="max-w-4xl mx-auto ai-gradient-border p-2 shadow-lg">
+<div class="flex items-end gap-2 bg-transparent">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-all">
+<span class="material-symbols-outlined">attach_file</span>
+</button>
+<textarea class="flex-1 bg-transparent border-none focus:ring-0 font-body-md resize-none py-2 max-h-40" placeholder="Ask your knowledge base..." rows="1"></textarea>
+<button class="bg-primary text-on-primary p-3 rounded-xl shadow-md hover:opacity-90 transition-all active:scale-95">
+<span class="material-symbols-outlined">send</span>
+</button>
+</div>
+</div>
+<p class="text-center font-label-sm text-on-surface-variant mt-3">Lumina can make mistakes. Verify important info.</p>
+</div>
+</section>
+<!-- Utility Panel (Right) -->
+<section class="w-80 bg-surface border-l border-outline-variant flex flex-col p-6 space-y-6">
+<h3 class="font-label-md text-on-surface font-bold uppercase tracking-widest border-b border-outline-variant pb-2">Actions</h3>
+<div class="space-y-4">
+<button class="w-full flex items-center justify-between p-4 bg-white border border-outline-variant rounded-xl hover:border-primary hover:shadow-md transition-all group">
+<div class="flex items-center gap-3">
+<div class="p-2 bg-primary-fixed rounded-lg text-primary">
+<span class="material-symbols-outlined">auto_awesome</span>
+</div>
+<div class="text-left">
+<span class="block font-body-sm font-bold text-on-surface">Generate Note</span>
+<span class="block font-label-sm text-on-surface-variant">Convert chat to markdown</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+<button class="w-full flex items-center justify-between p-4 bg-white border border-outline-variant rounded-xl hover:border-primary hover:shadow-md transition-all group">
+<div class="flex items-center gap-3">
+<div class="p-2 bg-tertiary-fixed rounded-lg text-tertiary">
+<span class="material-symbols-outlined">quiz</span>
+</div>
+<div class="text-left">
+<span class="block font-body-sm font-bold text-on-surface">Create Quiz</span>
+<span class="block font-label-sm text-on-surface-variant">Test your knowledge</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+<button class="w-full flex items-center justify-between p-4 bg-white border border-outline-variant rounded-xl hover:border-primary hover:shadow-md transition-all group">
+<div class="flex items-center gap-3">
+<div class="p-2 bg-surface-container-highest rounded-lg text-secondary">
+<span class="material-symbols-outlined">summarize</span>
+</div>
+<div class="text-left">
+<span class="block font-body-sm font-bold text-on-surface">Summarize Sources</span>
+<span class="block font-label-sm text-on-surface-variant">Key insights extraction</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+</div>
+<div class="mt-auto">
+<div class="p-4 bg-surface-container-low rounded-xl border border-outline-variant">
+<h4 class="font-label-md font-bold text-on-surface mb-2">Workspace Health</h4>
+<div class="w-full h-1.5 bg-outline-variant rounded-full overflow-hidden mb-2">
+<div class="w-3/4 h-full bg-primary"></div>
+</div>
+<p class="font-label-sm text-on-surface-variant">750MB / 1GB used</p>
+<button class="w-full mt-4 py-2 border border-primary text-primary font-label-md rounded-lg hover:bg-primary-fixed transition-colors">
+            Upgrade Storage
+          </button>
+</div>
+</div>
+</section>
+</main>
+<!-- Interactive Floating Background Effect -->
+<div class="fixed inset-0 -z-10 pointer-events-none overflow-hidden opacity-30">
+<div class="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-primary rounded-full blur-[120px] opacity-10 animate-pulse"></div>
+<div class="absolute bottom-[-5%] left-[10%] w-[400px] h-[400px] bg-primary-container rounded-full blur-[100px] opacity-10"></div>
+</div>
+<script>
+    // Lightweight interaction for auto-expanding textarea
+    const textarea = document.querySelector('textarea');
+    textarea.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = (this.scrollHeight) + 'px';
+    });
+
+    // Mock Active State for Chat History
+    const chatItems = document.querySelectorAll('section:first-of-type .flex-1 div');
+    chatItems.forEach(item => {
+      item.addEventListener('click', () => {
+        chatItems.forEach(i => {
+          i.classList.remove('bg-surface-container-low', 'border-l-2', 'border-primary');
+          i.querySelector('p').classList.remove('font-bold');
+        });
+        item.classList.add('bg-surface-container-low', 'border-l-2', 'border-primary');
+        item.querySelector('p').classList.add('font-bold');
+      });
+    });
+  </script>
+</body></html>
