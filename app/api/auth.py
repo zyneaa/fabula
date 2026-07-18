@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import UnauthorizedException
-from app.core.security import create_access_token, verify_password
+from app.core.security import create_access_token, hash_password, verify_password
 from app.core.rate_limit import limiter
 from app.database import get_db
 from app.dependencies import get_current_user
@@ -29,6 +29,9 @@ class UserResponse(BaseModel):
     name: str
     role: UserRole
     department: str | None
+    major: str | None = None
+    year: int | None = None
+    department_id: int | None = None
 
     model_config = {"from_attributes": True}
 
@@ -48,4 +51,27 @@ async def login(
 
 @router.get("/me", response_model=UserResponse)
 async def me(user: User = Depends(get_current_user)):
+    return user
+
+
+class UpdateProfileRequest(BaseModel):
+    name: str | None = None
+    current_password: str | None = None
+    new_password: str | None = None
+
+
+@router.put("/me", response_model=UserResponse)
+async def update_profile(
+    req: UpdateProfileRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if req.name is not None:
+        user.name = req.name
+    if req.new_password:
+        if not req.current_password or not verify_password(req.current_password, user.password_hash):
+            raise UnauthorizedException("Current password is incorrect")
+        user.password_hash = hash_password(req.new_password)
+    await db.commit()
+    await db.refresh(user)
     return user

@@ -66,45 +66,47 @@ export default function AssignConfigs() {
     }
   };
 
+  const inputClass = "block w-full px-4 py-3 font-body text-base border border-outline-variant rounded-lg bg-surface text-on-surface transition-[border-color,box-shadow] focus:outline-none focus:border-primary focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_20%,transparent)]";
+
   if (loading) return <p>Loading...</p>;
 
   return (
-    <div className="container">
-      <div className="page-header">
-        <h1 className="page-title">Assign LLM Configs</h1>
+    <div className="max-w-container mx-auto">
+      <div className="mb-6">
+        <h1 className="font-display text-3xl font-semibold text-on-surface">Assign LLM Configs</h1>
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
+      {error && <div className="p-3 rounded-lg mb-6 text-sm bg-error-container text-on-error-container">{error}</div>}
+      {success && <div className="p-3 rounded-lg mb-6 text-sm bg-[#d1fae5] text-[#065f46]">{success}</div>}
 
-      <div className="table-container">
-        <table>
-          <thead>
+      <div className="bg-white rounded-lg border border-border-subtle overflow-hidden">
+        <table className="w-full border-collapse">
+          <thead className="bg-surface-container-low">
             <tr>
-              <th>Student</th>
-              <th>Assigned Configs</th>
-              <th>Action</th>
+              <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Student</th>
+              <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Assigned Configs</th>
+              <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Action</th>
             </tr>
           </thead>
           <tbody>
             {students.map((student) => (
               <tr key={student.id}>
-                <td>
+                <td className="px-4 py-4 border-b border-border-subtle">
                   <div>{student.name}</div>
-                  <div className="text-muted">{student.email}</div>
+                  <div className="text-text-muted text-sm">{student.email}</div>
                 </td>
-                <td>
+                <td className="px-4 py-4 border-b border-border-subtle">
                   {assignments[student.id]?.map((assignment) => (
-                    <div key={assignment.id} style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px'}}>
+                    <div key={assignment.id} className="flex items-center gap-2 mb-2">
                       <span>{assignment.config.name}</span>
-                      <button onClick={() => handleRemove(assignment.id)} className="btn btn-secondary" style={{width: 'auto', padding: '4px 8px'}}>Remove</button>
+                      <button onClick={() => handleRemove(assignment.id)} className="inline-flex items-center justify-center rounded-lg font-mono text-xs font-medium border border-solid cursor-pointer transition-colors bg-secondary-container text-on-secondary-container border-outline hover:bg-surface-container-high px-3 py-1.5 w-auto">Remove</button>
                     </div>
                   ))}
-                  {(!assignments[student.id] || assignments[student.id].length === 0) && <span className="text-muted">None</span>}
+                  {(!assignments[student.id] || assignments[student.id].length === 0) && <span className="text-text-muted">None</span>}
                 </td>
-                <td>
+                <td className="px-4 py-4 border-b border-border-subtle">
                   <select
-                    className="form-input"
+                    className={inputClass}
                     style={{width: 'auto'}}
                     onChange={(e) => {
                       if (e.target.value) handleAssign(student.id, parseInt(e.target.value));

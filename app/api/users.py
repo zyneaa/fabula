@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
@@ -33,6 +35,10 @@ class UserResponse(BaseModel):
     name: str
     role: UserRole
     department: str | None
+    major: str | None = None
+    year: int | None = None
+    department_id: int | None = None
+    created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -83,6 +89,31 @@ async def list_users(
     result = await db.execute(select(User).order_by(User.created_at.desc()))
     users = result.scalars().all()
     return users
+
+
+class UpdateStudentRequest(BaseModel):
+    major: str | None = None
+    year: int | None = None
+
+
+@router.patch("/{user_id}", response_model=UserResponse)
+async def update_student(
+    user_id: int,
+    req: UpdateStudentRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
+):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise BadRequestException("User not found")
+    if req.major is not None:
+        user.major = req.major
+    if req.year is not None:
+        user.year = req.year
+    await db.commit()
+    await db.refresh(user)
+    return user
 
 
 @router.get("/students", response_model=list[UserResponse])

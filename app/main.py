@@ -11,6 +11,8 @@ from app.api.quizzes import router as quizzes_router
 from app.api.exam_papers import router as exam_papers_router
 from app.api.uni_info import router as uni_info_router
 from app.api.chat import router as chat_router
+from app.api.departments import router as departments_router
+from app.api.system_configs import router as system_configs_router
 from app.core.rate_limit import setup_rate_limiting
 
 app = FastAPI(title="Fabula", version="0.1.0")
@@ -34,6 +36,8 @@ app.include_router(quizzes_router)
 app.include_router(exam_papers_router)
 app.include_router(uni_info_router)
 app.include_router(chat_router)
+app.include_router(departments_router)
+app.include_router(system_configs_router)
 
 
 @app.get("/health")

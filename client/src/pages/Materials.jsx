@@ -3,9 +3,9 @@ import api from '../services/api';
 
 const statusBadgeClass = (status) => {
   switch (status) {
-    case 'ready': return 'badge-primary';
-    case 'failed': return 'badge-error';
-    default: return 'badge-secondary';
+    case 'ready': return 'bg-primary-container text-on-primary-container';
+    case 'failed': return 'bg-error-container text-on-error-container';
+    default: return 'bg-secondary-container text-on-secondary-container';
   }
 };
 
@@ -65,48 +65,43 @@ export default function Materials() {
   if (loading) return <p>Loading materials...</p>;
 
   return (
-    <div className="container">
-      <div className="page-header">
-        <h1 className="page-title">Study Materials</h1>
+    <div className="max-w-container mx-auto">
+      <div className="mb-6">
+        <h1 className="font-display text-3xl font-semibold text-on-surface">Study Materials</h1>
       </div>
 
-      {error && <div className="alert alert-error">{error}</div>}
+      {error && <div className="p-3 rounded-lg mb-6 text-sm bg-error-container text-on-error-container">{error}</div>}
 
-      <div className="upload-section">
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleUpload}
-          style={{ display: 'none' }}
-          accept=".pdf,.docx,.pptx,.txt"
-          disabled={uploading}
-        />
-        <button onClick={() => fileInputRef.current.click()} disabled={uploading} className="btn btn-primary" style={{width: 'auto'}}>
+      <div className="mb-6 p-6 bg-surface-container border-2 border-dashed border-outline-variant rounded-lg text-center">
+        <input type="file" ref={fileInputRef} onChange={handleUpload} className="hidden" accept=".pdf,.docx,.pptx,.txt" disabled={uploading} />
+        <button onClick={() => fileInputRef.current.click()} disabled={uploading} className="inline-flex items-center justify-center px-4 py-2 rounded-lg font-mono text-xs font-semibold border border-solid cursor-pointer transition-colors no-underline bg-primary text-on-primary hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed w-auto">
           {uploading ? 'Uploading...' : 'Upload a File'}
         </button>
-        <p className="text-muted" style={{marginTop: '8px'}}>Supported file types: PDF, DOCX, PPTX, TXT</p>
+        <p className="text-text-muted text-sm mt-2">Supported file types: PDF, DOCX, PPTX, TXT</p>
       </div>
 
-      <div className="table-container">
-        <table>
-          <thead>
+      <div className="bg-white rounded-lg border border-border-subtle overflow-hidden">
+        <table className="w-full border-collapse">
+          <thead className="bg-surface-container-low">
             <tr>
-              <th>Title</th>
-              <th>Type</th>
-              <th>Status</th>
-              <th>Uploaded</th>
-              <th></th>
+              <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Title</th>
+              <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Type</th>
+              <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Status</th>
+              <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Uploaded</th>
+              <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle"></th>
             </tr>
           </thead>
           <tbody>
             {materials.map((material) => (
               <tr key={material.id}>
-                <td>{material.title}</td>
-                <td>{material.file_type}</td>
-                <td><span className={`badge ${statusBadgeClass(material.status)}`}>{material.status}</span></td>
-                <td>{new Date(material.uploaded_at).toLocaleDateString()}</td>
-                <td>
-                  <button onClick={() => handleDelete(material.id)} className="btn btn-secondary" style={{width: 'auto'}}>Delete</button>
+                <td className="px-4 py-4 border-b border-border-subtle">{material.title}</td>
+                <td className="px-4 py-4 border-b border-border-subtle">{material.file_type}</td>
+                <td className="px-4 py-4 border-b border-border-subtle">
+                  <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium capitalize ${statusBadgeClass(material.status)}`}>{material.status}</span>
+                </td>
+                <td className="px-4 py-4 border-b border-border-subtle">{new Date(material.uploaded_at).toLocaleDateString()}</td>
+                <td className="px-4 py-4 border-b border-border-subtle">
+                  <button onClick={() => handleDelete(material.id)} className="inline-flex items-center justify-center rounded-lg font-mono text-xs font-medium border border-solid cursor-pointer transition-colors bg-secondary-container text-on-secondary-container border-outline hover:bg-surface-container-high px-3 py-1.5 w-auto">Delete</button>
                 </td>
               </tr>
             ))}

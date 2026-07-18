@@ -22,19 +22,19 @@ export default function Home() {
     : ALL_LINKS;
 
   return (
-    <div className="container">
-      <header className="home-header">
-        <h1 className="home-title">Welcome, {user.name}</h1>
-        <p className="home-subtitle">Here are some quick links to get you started.</p>
+    <div className="max-w-container mx-auto">
+      <header className="mb-10">
+        <h1 className="font-display text-5xl font-bold leading-[56px] tracking-tight text-on-surface">Welcome, {user.name}</h1>
+        <p className="font-body text-lg text-on-surface-variant mt-2">Here are some quick links to get you started.</p>
       </header>
 
       <main>
-        <h2 className="home-section-title">Tools &amp; Resources</h2>
-        <div className="quick-links-grid">
+        <h2 className="font-mono text-sm font-medium uppercase text-on-surface-variant mb-6">Tools &amp; Resources</h2>
+        <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
           {links.map((link) => (
-            <Link key={link.to} to={link.to} className="quick-link-card">
-              <h3 className="quick-link-card-title">{link.title}</h3>
-              <p className="quick-link-card-desc">{link.desc}</p>
+            <Link key={link.to} to={link.to} className="block p-6 bg-white rounded-lg no-underline text-on-surface border border-border-subtle transition-transform duration-200 hover:-translate-y-1 hover:shadow-[0_4px_12px_rgba(0,0,0,0.05),0_8px_24px_rgba(0,0,0,0.05)]">
+              <h3 className="font-display text-xl font-semibold mb-2">{link.title}</h3>
+              <p className="font-body text-sm text-text-muted">{link.desc}</p>
             </Link>
           ))}
         </div>
