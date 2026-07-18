@@ -53,7 +53,7 @@ async def list_conversations(
 ):
     """List all conversations for the current user."""
     conversations = await get_user_conversations(current_user.id, db)
-    
+
     result = []
     for conv in conversations:
         messages = await get_conversation_messages(conv.id, db)
@@ -62,7 +62,7 @@ async def list_conversations(
             "created_at": conv.created_at.isoformat(),
             "message_count": len(messages),
         })
-    
+
     return result
 
 
@@ -76,9 +76,9 @@ async def get_conversation_detail(
     conversation = await get_conversation(conversation_id, current_user.id, db)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    
+
     messages = await get_conversation_messages(conversation_id, db)
-    
+
     return {
         "id": conversation.id,
         "created_at": conversation.created_at.isoformat(),
@@ -106,7 +106,7 @@ async def send_query(
     conversation = await get_conversation(conversation_id, current_user.id, db)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    
+
     # Process the query
     assistant_message = await process_student_query(
         conversation_id=conversation_id,
@@ -114,7 +114,7 @@ async def send_query(
         query=request.query,
         db=db,
     )
-    
+
     return {
         "id": assistant_message.id,
         "role": assistant_message.role.value,

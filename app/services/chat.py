@@ -88,7 +88,7 @@ async def get_conversation_context(
     Build context from conversation materials and university info.
     """
     context_parts = []
-    
+
     # Get materials for this conversation
     materials_result = await db.execute(
         select(Material).where(
@@ -98,7 +98,7 @@ async def get_conversation_context(
         )
     )
     materials = materials_result.scalars().all()
-    
+
     if materials:
         context_parts.append("=== CONVERSATION MATERIALS ===")
         for material in materials:
@@ -109,22 +109,22 @@ async def get_conversation_context(
                 .order_by(Chunk.chunk_index)
             )
             chunks = chunks_result.scalars().all()
-            
+
             if chunks:
                 context_parts.append(f"\n--- {material.title} ---")
                 for chunk in chunks:
                     context_parts.append(chunk.text)
-    
+
     # Search for relevant university info based on query
     keywords = [word.lower() for word in query.split() if len(word) > 2]
     if keywords:
         from sqlalchemy import or_
-        
+
         conditions = []
         for keyword in keywords:
             conditions.append(UniInfo.title.ilike(f"%{keyword}%"))
             conditions.append(UniInfo.content.ilike(f"%{keyword}%"))
-        
+
         if conditions:
             uni_info_result = await db.execute(
                 select(UniInfo)
@@ -133,16 +133,16 @@ async def get_conversation_context(
                 .limit(5)
             )
             uni_info_entries = uni_info_result.scalars().all()
-            
+
             if uni_info_entries:
                 context_parts.append("\n\n=== UNIVERSITY INFORMATION ===")
                 for entry in uni_info_entries:
                     context_parts.append(f"\n[{entry.category.value.upper()}] {entry.title}")
                     context_parts.append(entry.content)
-    
+
     if not context_parts:
         return "No relevant materials or university information found."
-    
+
     return "\n".join(context_parts)
 
 
@@ -167,10 +167,10 @@ async def process_student_query(
         content=query,
         db=db,
     )
-    
+
     # Get context from materials and uni info
     context = await get_conversation_context(conversation_id, user_id, query, db)
-    
+
     # Build messages for LLM
     system_prompt = """You are a helpful educational assistant. Use the following context to answer the student's question. If the context doesn't contain the answer, say so honestly. Be concise and helpful.
 

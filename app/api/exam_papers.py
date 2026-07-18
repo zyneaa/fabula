@@ -80,7 +80,7 @@ async def get_exam_papers_by_course(
         .order_by(ExamPaper.paper_number)
     )
     papers = result.scalars().all()
-    
+
     return [
         {
             "id": paper.id,
@@ -109,7 +109,7 @@ async def get_exam_paper(
     paper = result.scalar_one_or_none()
     if not paper:
         raise NotFoundException("Exam paper not found")
-    
+
     return {
         "id": paper.id,
         "course_id": paper.course_id,
@@ -132,7 +132,7 @@ async def list_exam_papers(
         .order_by(ExamPaper.created_at.desc())
     )
     papers = result.scalars().all()
-    
+
     return [
         {
             "id": paper.id,
