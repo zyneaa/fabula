@@ -178,3 +178,45 @@ Make this paper unique and different from other papers you might generate.""",
         )
     
     return papers
+
+
+async def generate_questions_from_materials(
+    material_ids: list[int],
+    source_exam_id: int | None,
+    teacher_id: int,
+    db: AsyncSession,
+) -> str:
+    materials_content = []
+    for mid in material_ids:
+        result = await db.execute(select(Material).where(Material.id == mid))
+        material = result.scalar_one_or_none()
+        if not material:
+            raise ValueError(f"Material {mid} not found")
+        result = await db.execute(
+            select(Chunk).where(Chunk.material_id == mid).order_by(Chunk.chunk_index)
+        )
+        chunks = result.scalars().all()
+        if not chunks:
+            raise ValueError(f"No chunks found for material {mid}")
+        content = "\n\n".join([chunk.text for chunk in chunks])
+        materials_content.append(f"--- {material.title} ---\n{content}")
+    combined = "\n\n".join(materials_content)
+
+    style_instruction = ""
+    if source_exam_id:
+        result = await db.execute(select(ExamPaper).where(ExamPaper.id == source_exam_id))
+        source = result.scalar_one_or_none()
+        if source:
+            style_instruction = f"\nUse this example exam as style reference:\n\n{source.content[:2000]}\n"
+
+    messages = [
+        {
+            "role": "system",
+            "content": f"You are an expert educator creating exam questions. Based on the course materials, generate exactly 3 exam questions. Each question should test different topics, include marks allocation, a difficulty level (Easy/Medium/Hard), and a model answer.{style_instruction}Format each question in markdown with:\n## Question 1\n**Topic:** ...\n**Marks:** ...\n**Difficulty:** ...\n**Question:** ...\n**Model Answer:** ...",
+        },
+        {
+            "role": "user",
+            "content": f"Generate 3 exam questions based on these materials:\n\n{combined}",
+        },
+    ]
+    return await generate_with_student_config(messages, teacher_id, db)

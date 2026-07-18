@@ -7,6 +7,7 @@ import LLMConfigs from './pages/LLMConfigs';
 import StudentAssignments from './pages/StudentAssignments';
 import Users from './pages/Users';
 import Chat from './pages/Chat';
+import ExamPaper from './pages/ExamPaper';
 import UniInfo from './pages/UniInfo';
 import Profile from './pages/Profile';
 import MyLLMConfig from './pages/MyLLMConfig';
@@ -71,6 +72,7 @@ function AppRoutes() {
         }
       >
         <Route path="/chat" element={<Chat />} />
+        <Route path="/exam-paper" element={<RoleRoute roles={['teacher', 'admin']}><ExamPaper /></RoleRoute>} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/my-llm-config" element={<MyLLMConfig />} />
         <Route path="/uni-info" element={<RoleRoute roles={['teacher', 'admin']}><UniInfo /></RoleRoute>} />

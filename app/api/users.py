@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BadRequestException, ForbiddenException
+from app.core.exceptions import BadRequestException, ForbiddenException, NotFoundException
 from app.core.security import hash_password
 from app.database import get_db
 from app.dependencies import get_current_user, require_role
@@ -128,3 +128,19 @@ async def list_students(
     )
     students = result.scalars().all()
     return students
+
+
+@router.delete("/{user_id}", status_code=204)
+async def delete_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin)),
+):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise NotFoundException("User not found")
+    if user.role == UserRole.admin:
+        raise ForbiddenException("Cannot delete admin users")
+    await db.delete(user)
+    await db.commit()

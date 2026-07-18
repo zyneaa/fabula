@@ -60,10 +60,10 @@ class StudentConfigResponse(BaseModel):
 async def create_config(
     req: LLMConfigCreate,
     db: AsyncSession = Depends(get_db),
-    teacher: User = Depends(require_role(UserRole.teacher)),
+    user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
 ):
     config = LLMConfig(
-        teacher_id=teacher.id,
+        teacher_id=user.id,
         name=req.name,
         provider=req.provider,
         model_name=req.model_name,
@@ -193,14 +193,19 @@ async def update_config(
     config_id: int,
     req: LLMConfigUpdate,
     db: AsyncSession = Depends(get_db),
-    teacher: User = Depends(require_role(UserRole.teacher)),
+    user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
 ):
-    result = await db.execute(
-        select(LLMConfig).where(
-            LLMConfig.id == config_id,
-            LLMConfig.teacher_id == teacher.id,
+    if user.role == UserRole.admin:
+        result = await db.execute(
+            select(LLMConfig).where(LLMConfig.id == config_id)
         )
-    )
+    else:
+        result = await db.execute(
+            select(LLMConfig).where(
+                LLMConfig.id == config_id,
+                LLMConfig.teacher_id == user.id,
+            )
+        )
     config = result.scalar_one_or_none()
     if not config:
         raise NotFoundException("Config not found")
@@ -235,14 +240,19 @@ async def update_config(
 async def delete_config(
     config_id: int,
     db: AsyncSession = Depends(get_db),
-    teacher: User = Depends(require_role(UserRole.teacher)),
+    user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
 ):
-    result = await db.execute(
-        select(LLMConfig).where(
-            LLMConfig.id == config_id,
-            LLMConfig.teacher_id == teacher.id,
+    if user.role == UserRole.admin:
+        result = await db.execute(
+            select(LLMConfig).where(LLMConfig.id == config_id)
         )
-    )
+    else:
+        result = await db.execute(
+            select(LLMConfig).where(
+                LLMConfig.id == config_id,
+                LLMConfig.teacher_id == user.id,
+            )
+        )
     config = result.scalar_one_or_none()
     if not config:
         raise NotFoundException("Config not found")

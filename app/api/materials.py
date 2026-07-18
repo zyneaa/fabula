@@ -65,6 +65,53 @@ async def process_material(material_id: int, file_path: str):
             raise
 
 
+@router.post("/upload", response_model=MaterialResponse, status_code=201)
+async def upload_material_standalone(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = Depends(get_upload_file),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    filename = file.filename
+    assert filename is not None
+
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_TYPES:
+        raise BadRequestException(f"Unsupported file type: {ext}")
+
+    content = await file.read()
+    max_size = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    if len(content) > max_size:
+        raise BadRequestException(f"File too large (max {settings.MAX_UPLOAD_SIZE_MB}MB)")
+
+    user_dir = Path(settings.UPLOAD_DIR) / str(user.id)
+    user_dir.mkdir(parents=True, exist_ok=True)
+
+    file_path = user_dir / f"{os.urandom(8).hex()}{ext}"
+    file_path.write_bytes(content)
+
+    material = Material(
+        user_id=user.id,
+        title=file.filename,
+        file_path=str(file_path),
+        file_type=ext[1:],
+        status=MaterialStatus.pending,
+    )
+    db.add(material)
+    await db.commit()
+    await db.refresh(material)
+
+    background_tasks.add_task(process_material, material.id, str(file_path))
+
+    return MaterialResponse(
+        id=material.id,
+        title=material.title,
+        file_type=material.file_type,
+        status=material.status,
+        uploaded_at=material.uploaded_at.isoformat(),
+    )
+
+
 @router.post("/conversation/{conversation_id}", response_model=MaterialResponse, status_code=201)
 async def upload_material_to_conversation(
     conversation_id: int,
@@ -152,6 +199,29 @@ async def list_conversation_materials(
             Material.conversation_id == conversation_id,
             Material.user_id == user.id,
         )
+        .order_by(Material.uploaded_at.desc())
+    )
+    materials = result.scalars().all()
+    return [
+        MaterialResponse(
+            id=m.id,
+            title=m.title,
+            file_type=m.file_type,
+            status=m.status,
+            uploaded_at=m.uploaded_at.isoformat(),
+        )
+        for m in materials
+    ]
+
+
+@router.get("", response_model=list[MaterialResponse])
+async def list_user_materials(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Material)
+        .where(Material.user_id == user.id)
         .order_by(Material.uploaded_at.desc())
     )
     materials = result.scalars().all()

@@ -101,7 +101,7 @@ export default function StudentAssignments() {
     }
   };
 
-  const inputClass = "block w-full px-4 py-3 font-body text-base border border-outline-variant rounded-lg bg-surface text-on-surface transition-[border-color,box-shadow] focus:outline-none focus:border-primary focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_20%,transparent)]";
+  const inputClass = "w-full px-3 py-2 font-mono text-xs border border-outline-variant rounded-lg bg-surface text-on-surface transition-[border-color,box-shadow] focus:outline-none focus:border-primary focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_20%,transparent)] appearance-none cursor-pointer";
 
   if (loading) return <p>Loading...</p>;
 
@@ -171,7 +171,7 @@ export default function StudentAssignments() {
                     {assignments[student.id]?.map((assignment) => (
                       <div key={assignment.id} className="flex items-center gap-2 mb-2">
                         <span>{assignment.config.name}</span>
-                        <button onClick={() => handleRemove(assignment.id)} className="inline-flex items-center justify-center rounded-lg font-mono text-xs font-medium border border-solid cursor-pointer transition-colors bg-secondary-container text-on-secondary-container border-outline hover:bg-surface-container-high px-3 py-1.5 w-auto">Remove</button>
+                        <button onClick={() => handleRemove(assignment.id)} className="inline-flex items-center justify-center rounded-lg font-mono text-xs font-medium border border-solid cursor-pointer transition-colors bg-surface-container-highest text-on-surface border-outline-variant hover:bg-surface-container-high px-3 py-1.5 w-auto">Remove</button>
                       </div>
                     ))}
                     {(!assignments[student.id] || assignments[student.id].length === 0) && <span className="text-text-muted">None</span>}

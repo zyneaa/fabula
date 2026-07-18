@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, X } from 'lucide-react';
+import { Search, X, Trash2 } from 'lucide-react';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const roleBadgeClass = (role) => {
   switch (role) {
@@ -14,6 +15,7 @@ const roleBadgeClass = (role) => {
 const filterClass = "w-full px-3 py-2 font-mono text-xs border border-outline-variant rounded-lg bg-surface text-on-surface transition-[border-color,box-shadow] focus:outline-none focus:border-primary focus:shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_20%,transparent)] appearance-none cursor-pointer";
 
 export default function Users() {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +53,17 @@ export default function Users() {
   });
 
   if (loading) return <p>Loading users...</p>;
+
+  const handleDelete = async (userId, userName) => {
+    if (!confirm(`Delete user "${userName}"? This cannot be undone.`)) return;
+    setError('');
+    try {
+      await api.delete(`/users/${userId}`);
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to delete user');
+    }
+  };
 
   const yearOpts = [1, 2, 3, 4, 5, 6];
 
@@ -114,6 +127,7 @@ export default function Users() {
               <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Major</th>
               <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Department</th>
               <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Created At</th>
+              {currentUser?.role === 'admin' && <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -130,12 +144,21 @@ export default function Users() {
                   <td className="px-4 py-4 border-b border-border-subtle font-mono text-sm">{user.major || '—'}</td>
                   <td className="px-4 py-4 border-b border-border-subtle font-mono text-sm">{dept?.name || user.department || '—'}</td>
                   <td className="px-4 py-4 border-b border-border-subtle font-mono text-sm">{new Date(user.created_at).toLocaleDateString()}</td>
+                  {currentUser?.role === 'admin' && (
+                    <td className="px-4 py-4 border-b border-border-subtle">
+                      {user.role !== 'admin' && (
+                        <button onClick={() => handleDelete(user.id, user.name)} className="inline-flex items-center gap-1 rounded-lg font-mono text-xs font-medium border border-solid cursor-pointer transition-colors bg-error-container text-on-error-container border-outline hover:opacity-80 px-3 py-1.5" title="Delete user">
+                          <Trash2 size={13} /> Delete
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               );
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-on-surface-variant text-sm">No users match the current filters.</td>
+                <td colSpan={currentUser?.role === 'admin' ? 8 : 7} className="px-4 py-8 text-center text-on-surface-variant text-sm">No users match the current filters.</td>
               </tr>
             )}
           </tbody>

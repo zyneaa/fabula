@@ -11,7 +11,7 @@ class ExamPaper(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     course_id: Mapped[str] = mapped_column(String(255), index=True)
-    teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     source_exam_id: Mapped[int | None] = mapped_column(ForeignKey("materials.id"))
     paper_number: Mapped[int] = mapped_column(Integer)
     content: Mapped[str] = mapped_column(Text)

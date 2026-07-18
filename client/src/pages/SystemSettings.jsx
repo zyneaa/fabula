@@ -7,11 +7,11 @@ export default function SystemSettings() {
     system_prompt: '',
     model_name: '',
     temperature: 0.7,
-    max_materials: 5,
+    max_materials: 25,
     top_p: 1.0,
     frequency_penalty: 0.0,
     presence_penalty: 0.0,
-    max_tokens: 4096,
+    max_tokens: 100000,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -78,7 +78,7 @@ export default function SystemSettings() {
               className={inputClass}
               placeholder="e.g. openai/gpt-4o"
             />
-            <p className="font-mono text-[11px] font-medium text-on-surface-variant mt-1.5">This model is used by teachers, admins, and students without an assigned config.</p>
+            <p className="font-mono text-[11px] font-medium text-on-surface-variant mt-1.5">This model is used by teachers, admins.</p>
           </div>
 
           <div>

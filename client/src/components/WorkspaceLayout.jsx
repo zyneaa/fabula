@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   Bot, User,
   SlidersHorizontal, UserPlus, Users, GraduationCap, Settings, Building2,
-  LogOut, Cog,
+  LogOut, Cog, FileText,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -16,6 +16,7 @@ const STUDENT_ITEMS = [
 ];
 
 const TEACHER_ITEMS = [
+  { to: '/exam-paper', icon: FileText, label: 'Exam Paper' },
   { to: '/llm-configs', icon: SlidersHorizontal, label: 'LLM Configs' },
   { to: '/student-assignments', icon: UserPlus, label: 'Student Assignments' },
   { to: '/users', icon: Users, label: 'Users' },

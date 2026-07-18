@@ -9,7 +9,7 @@ from app.database import get_db
 from app.dependencies import get_current_user, require_role
 from app.models.exam_paper import ExamPaper
 from app.models.user import User, UserRole
-from app.services.exam_paper import generate_exam_papers
+from app.services.exam_paper import generate_exam_papers, generate_questions_from_materials
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/exam-papers", tags=["exam-papers"])
@@ -20,6 +20,11 @@ class GenerateExamPapersRequest(BaseModel):
     source_exam_id: int | None = None
     course_id: str
     num_papers: int = 5
+
+
+class GenerateQuestionsRequest(BaseModel):
+    material_ids: list[int]
+    source_exam_id: int | None = None
 
 
 async def generate_exam_papers_background(
@@ -65,6 +70,27 @@ async def generate_exam_papers_endpoint(
         "course_id": req.course_id,
         "num_papers": req.num_papers,
     }
+
+
+@router.post("/generate-questions")
+async def generate_questions(
+    req: GenerateQuestionsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
+):
+    content = await generate_questions_from_materials(
+        req.material_ids, req.source_exam_id, current_user.id, db
+    )
+    paper = ExamPaper(
+        course_id="generated",
+        teacher_id=current_user.id,
+        paper_number=1,
+        content=content,
+    )
+    db.add(paper)
+    await db.commit()
+    await db.refresh(paper)
+    return {"id": paper.id, "content": content, "created_at": paper.created_at.isoformat()}
 
 
 @router.get("/course/{course_id}")

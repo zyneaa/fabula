@@ -18,7 +18,7 @@ class Material(Base):
     __tablename__ = "materials"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     conversation_id: Mapped[int | None] = mapped_column(
         ForeignKey("conversations.id", ondelete="CASCADE"), index=True
     )

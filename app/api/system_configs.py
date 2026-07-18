@@ -15,11 +15,11 @@ class SystemConfigResponse(BaseModel):
     system_prompt: str = ""
     model_name: str = ""
     temperature: float = 0.7
-    max_materials: int = 5
+    max_materials: int = 25
     top_p: float = 1.0
     frequency_penalty: float = 0.0
     presence_penalty: float = 0.0
-    max_tokens: int = 4096
+    max_tokens: int = 100000
 
     model_config = {"from_attributes": True}
 
@@ -49,7 +49,7 @@ async def get_or_create_config(db: AsyncSession) -> SystemConfig:
 @router.get("", response_model=SystemConfigResponse)
 async def get_system_config(
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_role(UserRole.admin)),
+    _user: User = Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     config = await get_or_create_config(db)
     return config

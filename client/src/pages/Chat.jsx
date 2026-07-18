@@ -49,8 +49,8 @@ export default function Chat() {
   const [showViewer, setShowViewer] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [hasConfig, setHasConfig] = useState(null);
-  const [maxMaterials, setMaxMaterials] = useState(5);
-  const [maxTokens, setMaxTokens] = useState(4096);
+  const [maxMaterials, setMaxMaterials] = useState(25);
+  const [maxTokens, setMaxTokens] = useState(100000);
   const [renamingConvId, setRenamingConvId] = useState(null);
   const [renameText, setRenameText] = useState('');
   const [greetingText] = useState(() => {
@@ -78,26 +78,28 @@ export default function Chat() {
   }, []);
 
   const checkConfig = async () => {
-    if (user?.role !== 'student') {
-      setHasConfig(true);
+    if (user?.role === 'student') {
       try {
-        const { data } = await api.get('/system-configs');
-        setMaxMaterials(data.max_materials ?? 5);
-        setMaxTokens(data.max_tokens ?? 4096);
+        const { data } = await api.get('/llm-configs/me');
+        setHasConfig(true);
+        setMaxMaterials(data.config.max_materials ?? 25);
+        setMaxTokens(data.config.max_tokens ?? 100000);
+        return;
       } catch {
-        setMaxMaterials(5);
-        setMaxTokens(4096);
+        setHasConfig(false);
+        return;
       }
-      return;
     }
+
     try {
-      const { data } = await api.get('/llm-configs/me');
-      setHasConfig(true);
-      setMaxMaterials(data.config.max_materials ?? 5);
-      setMaxTokens(data.config.max_tokens ?? 4096);
+      const sysRes = await api.get('/system-configs');
+      setMaxMaterials(sysRes.data.max_materials ?? 25);
+      setMaxTokens(sysRes.data.max_tokens ?? 100000);
     } catch {
-      setHasConfig(false);
+      setMaxMaterials(25);
+      setMaxTokens(100000);
     }
+    setHasConfig(true);
   };
 
   useEffect(() => {
@@ -444,7 +446,7 @@ export default function Chat() {
             </div>
           ) : !currentConversation ? (
             <div className="flex flex-col items-center justify-center h-full text-center px-6 greeting-enter relative z-10">
-              <p className="font-mono text-2xl sm:text-3xl font-semibold uppercase tracking-wider text-on-surface relative">
+              <p className="font-mono text-2xl sm:text-3xl font-semibold uppercase tracking-wider text-on-surface relative py-10">
                 {greetingText}
               </p>
               <div className="w-full max-w-[640px] p-2 bg-surface rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.06)] flex items-end gap-1.5 relative">
@@ -653,9 +655,9 @@ export default function Chat() {
         <div className="mt-auto mx-4 mb-4 p-4 bg-surface-container-low rounded-lg border border-outline-variant">
           <h4 className="font-mono text-xs font-semibold text-on-surface mb-2">Token Limit</h4>
           <div className="w-full h-1.5 bg-outline-variant rounded-full overflow-hidden mb-2">
-            <div className="h-full bg-tertiary rounded-full" style={{ width: '100%' }} />
+            <div className="h-full bg-tertiary rounded-full transition-all duration-300" style={{ width: `${Math.min((messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0) / maxTokens) * 100, 100)}%` }} />
           </div>
-          <p className="font-mono text-[11px] font-medium text-on-surface-variant">{maxTokens.toLocaleString()} tokens max per response</p>
+          <p className="font-mono text-[11px] font-medium text-on-surface-variant">{messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0).toLocaleString()} / {maxTokens.toLocaleString()} tokens used</p>
         </div>
 
         <div className="mx-4 mb-2 flex items-center gap-2 text-outline-variant">

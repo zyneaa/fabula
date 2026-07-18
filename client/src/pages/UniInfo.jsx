@@ -116,7 +116,7 @@ export default function UniInfo() {
                         <div className="flex justify-between items-start mb-4">
                             <div>
                                 <span className="inline-block px-2 py-1 rounded-full text-xs font-medium capitalize bg-secondary-container text-on-secondary-container">{item.category}</span>
-                                <h3 className="font-display text-xl font-semibold mt-2">{item.title}</h3>
+                                <h3 className="font-mono text-xs font-semibold uppercase tracking-wider mt-2">{item.title}</h3>
                             </div>
                             {user?.role !== 'student' && (
                                 <div className="flex gap-2">
@@ -125,7 +125,7 @@ export default function UniInfo() {
                                 </div>
                             )}
                         </div>
-                        <div className="flex-1 mb-4 markdown-content">
+                        <div className="flex-1 mb-4 font-body text-sm leading-relaxed text-on-surface-variant">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.content}</ReactMarkdown>
                         </div>
                     </div>
