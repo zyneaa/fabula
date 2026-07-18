@@ -5,7 +5,9 @@ import api from '../services/api';
 export default function SystemSettings() {
   const [config, setConfig] = useState({
     system_prompt: '',
+    model_name: '',
     temperature: 0.7,
+    max_materials: 5,
     top_p: 1.0,
     frequency_penalty: 0.0,
     presence_penalty: 0.0,
@@ -65,6 +67,18 @@ export default function SystemSettings() {
               className={`${inputClass} min-h-[200px] font-mono text-sm leading-relaxed`}
               placeholder="Default system prompt for all LLM interactions..."
             />
+          </div>
+
+          <div>
+            <label className={labelClass}>Model (Teachers &amp; Admins)</label>
+            <input
+              type="text"
+              value={config.model_name}
+              onChange={(e) => setConfig({ ...config, model_name: e.target.value })}
+              className={inputClass}
+              placeholder="e.g. openai/gpt-4o"
+            />
+            <p className="font-mono text-[11px] font-medium text-on-surface-variant mt-1.5">This model is used by teachers, admins, and students without an assigned config.</p>
           </div>
 
           <div>
@@ -138,6 +152,18 @@ export default function SystemSettings() {
                     max="128000"
                     value={config.max_tokens}
                     onChange={(e) => setConfig({ ...config, max_tokens: parseInt(e.target.value) || 0 })}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Max Materials</label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="1"
+                    max="50"
+                    value={config.max_materials}
+                    onChange={(e) => setConfig({ ...config, max_materials: parseInt(e.target.value) || 1 })}
                     className={inputClass}
                   />
                 </div>

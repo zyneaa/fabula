@@ -13,7 +13,9 @@ router = APIRouter(prefix="/system-configs", tags=["system-configs"])
 
 class SystemConfigResponse(BaseModel):
     system_prompt: str = ""
+    model_name: str = ""
     temperature: float = 0.7
+    max_materials: int = 5
     top_p: float = 1.0
     frequency_penalty: float = 0.0
     presence_penalty: float = 0.0
@@ -24,7 +26,9 @@ class SystemConfigResponse(BaseModel):
 
 class SystemConfigUpdate(BaseModel):
     system_prompt: str | None = None
+    model_name: str | None = None
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    max_materials: int | None = Field(default=None, ge=1, le=50)
     top_p: float | None = Field(default=None, ge=0.0, le=1.0)
     frequency_penalty: float | None = Field(default=None, ge=-2.0, le=2.0)
     presence_penalty: float | None = Field(default=None, ge=-2.0, le=2.0)
@@ -60,6 +64,10 @@ async def update_system_config(
     config = await get_or_create_config(db)
     if req.system_prompt is not None:
         config.system_prompt = req.system_prompt
+    if req.model_name is not None:
+        config.model_name = req.model_name
+    if req.max_materials is not None:
+        config.max_materials = req.max_materials
     if req.temperature is not None:
         config.temperature = req.temperature
     if req.top_p is not None:

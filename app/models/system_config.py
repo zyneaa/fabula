@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Text, Integer, DateTime, func
+from sqlalchemy import Text, Integer, String, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.user import Base
@@ -11,7 +11,9 @@ class SystemConfig(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     system_prompt: Mapped[str] = mapped_column(Text, default="")
+    model_name: Mapped[str] = mapped_column(String(100), default="")
     temperature: Mapped[float] = mapped_column(default=0.7)
+    max_materials: Mapped[int] = mapped_column(Integer, default=5)
     top_p: Mapped[float] = mapped_column(default=1.0)
     frequency_penalty: Mapped[float] = mapped_column(default=0.0)
     presence_penalty: Mapped[float] = mapped_column(default=0.0)

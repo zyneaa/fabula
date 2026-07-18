@@ -34,6 +34,50 @@ async def get_conversation(
     return result.scalar_one_or_none()
 
 
+async def rename_conversation(
+    conversation_id: int,
+    user_id: int,
+    title: str,
+    db: AsyncSession,
+) -> Conversation | None:
+    conversation = await get_conversation(conversation_id, user_id, db)
+    if not conversation:
+        return None
+    conversation.title = title
+    await db.commit()
+    await db.refresh(conversation)
+    return conversation
+
+
+async def generate_conversation_title(
+    conversation_id: int,
+    user_id: int,
+    db: AsyncSession,
+) -> str | None:
+    conversation = await get_conversation(conversation_id, user_id, db)
+    if not conversation:
+        return None
+    messages = await get_conversation_messages(conversation_id, db)
+    if not messages:
+        return None
+    text = "\n".join(f"{m.role.value}: {m.content[:200]}" for m in messages[:4])
+    prompt = (
+        "Generate a very short title (max 6 words, no quotes) for this conversation based on the messages:\n"
+        f"{text}\n\nTitle:"
+    )
+    try:
+        from app.services.llm import generate_with_student_config
+        title = await generate_with_student_config(
+            [{"role": "user", "content": prompt}], user_id, db
+        )
+        title = title.strip().strip('"').strip("'")[:255]
+        conversation.title = title
+        await db.commit()
+        return title
+    except Exception:
+        return None
+
+
 async def get_user_conversations(
     user_id: int,
     db: AsyncSession,

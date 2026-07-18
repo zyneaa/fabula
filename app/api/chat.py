@@ -11,6 +11,8 @@ from app.services.chat import (
     get_user_conversations,
     get_conversation_messages,
     process_student_query,
+    rename_conversation,
+    generate_conversation_title,
 )
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -20,8 +22,13 @@ class QueryRequest(BaseModel):
     query: str
 
 
+class RenameRequest(BaseModel):
+    title: str
+
+
 class ConversationResponse(BaseModel):
     id: int
+    title: str | None
     created_at: str
     message_count: int
 
@@ -42,6 +49,7 @@ async def start_conversation(
     conversation = await create_conversation(current_user.id, db)
     return {
         "id": conversation.id,
+        "title": conversation.title,
         "created_at": conversation.created_at.isoformat(),
     }
 
@@ -59,6 +67,7 @@ async def list_conversations(
         messages = await get_conversation_messages(conv.id, db)
         result.append({
             "id": conv.id,
+            "title": conv.title,
             "created_at": conv.created_at.isoformat(),
             "message_count": len(messages),
         })
@@ -81,6 +90,7 @@ async def get_conversation_detail(
 
     return {
         "id": conversation.id,
+        "title": conversation.title,
         "created_at": conversation.created_at.isoformat(),
         "messages": [
             {
@@ -121,3 +131,32 @@ async def send_query(
         "content": assistant_message.content,
         "created_at": assistant_message.created_at.isoformat(),
     }
+
+
+@router.patch("/conversations/{conversation_id}")
+async def rename_conversation_endpoint(
+    conversation_id: int,
+    request: RenameRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    conversation = await rename_conversation(conversation_id, current_user.id, request.title, db)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {
+        "id": conversation.id,
+        "title": conversation.title,
+        "created_at": conversation.created_at.isoformat(),
+    }
+
+
+@router.post("/conversations/{conversation_id}/generate-title")
+async def generate_title(
+    conversation_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    title = await generate_conversation_title(conversation_id, current_user.id, db)
+    if title is None:
+        raise HTTPException(status_code=404, detail="Conversation not found or no messages")
+    return {"title": title}

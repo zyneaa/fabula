@@ -3,12 +3,16 @@ import { useAuth } from '../context/AuthContext';
 import {
   Bot, User,
   SlidersHorizontal, UserPlus, Users, GraduationCap, Settings, Building2,
-  LogOut,
+  LogOut, Cog,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { to: '/chat', icon: Bot, label: 'Chat' },
   { to: '/profile', icon: User, label: 'Profile' },
+];
+
+const STUDENT_ITEMS = [
+  { to: '/my-llm-config', icon: Cog, label: 'Assigned Config' },
 ];
 
 const TEACHER_ITEMS = [
@@ -45,6 +49,20 @@ export default function WorkspaceLayout() {
               </NavLink>
             );
           })}
+
+          {user?.role === 'student' && (
+            <>
+              <div className="w-8 border-t border-outline-variant my-1" />
+              {STUDENT_ITEMS.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink key={item.to} to={item.to} className={linkClass} title={item.label}>
+                    <Icon size={20} />
+                  </NavLink>
+                );
+              })}
+            </>
+          )}
 
           {(user?.role === 'teacher' || user?.role === 'admin') && (
             <>

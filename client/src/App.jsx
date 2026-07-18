@@ -9,6 +9,7 @@ import Users from './pages/Users';
 import Chat from './pages/Chat';
 import UniInfo from './pages/UniInfo';
 import Profile from './pages/Profile';
+import MyLLMConfig from './pages/MyLLMConfig';
 import SystemSettings from './pages/SystemSettings';
 import Departments from './pages/Departments';
 
@@ -71,6 +72,7 @@ function AppRoutes() {
       >
         <Route path="/chat" element={<Chat />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/my-llm-config" element={<MyLLMConfig />} />
         <Route path="/uni-info" element={<RoleRoute roles={['teacher', 'admin']}><UniInfo /></RoleRoute>} />
         <Route path="/llm-configs" element={<RoleRoute roles={['teacher', 'admin']}><LLMConfigs /></RoleRoute>} />
         <Route path="/student-assignments" element={<RoleRoute roles={['teacher', 'admin']}><StudentAssignments /></RoleRoute>} />

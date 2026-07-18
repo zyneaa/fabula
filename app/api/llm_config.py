@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundException, ForbiddenException
+from app.core.exceptions import NotFoundException
 from app.database import get_db
 from app.dependencies import get_current_user, require_role
 from app.models.llm_config import LLMConfig, StudentLLMConfig
@@ -91,11 +91,14 @@ async def create_config(
 @router.get("", response_model=list[LLMConfigResponse])
 async def list_configs(
     db: AsyncSession = Depends(get_db),
-    teacher: User = Depends(require_role(UserRole.teacher)),
+    user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
 ):
-    result = await db.execute(
-        select(LLMConfig).where(LLMConfig.teacher_id == teacher.id)
-    )
+    if user.role == UserRole.admin:
+        result = await db.execute(select(LLMConfig))
+    else:
+        result = await db.execute(
+            select(LLMConfig).where(LLMConfig.teacher_id == user.id)
+        )
     configs = result.scalars().all()
     return [
         LLMConfigResponse(
@@ -113,18 +116,62 @@ async def list_configs(
     ]
 
 
+@router.get("/me", response_model=StudentConfigResponse)
+async def get_my_config(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    config = await get_student_active_config(user.id, db)
+    if not config:
+        raise NotFoundException("No LLM config assigned")
+
+    assignment_result = await db.execute(
+        select(StudentLLMConfig).where(
+            StudentLLMConfig.student_id == user.id,
+            StudentLLMConfig.config_id == config.id,
+        )
+    )
+    assignment = assignment_result.scalar_one_or_none()
+    if not assignment:
+        raise NotFoundException("No LLM config assigned")
+
+    return StudentConfigResponse(
+        id=assignment.id,
+        student_id=assignment.student_id,
+        config_id=assignment.config_id,
+        teacher_id=assignment.teacher_id,
+        assigned_at=assignment.assigned_at.isoformat(),
+        config=LLMConfigResponse(
+            id=config.id,
+            teacher_id=config.teacher_id,
+            name=config.name,
+            provider=config.provider,
+            model_name=config.model_name,
+            is_active=config.is_active,
+            max_tokens=config.max_tokens,
+            max_materials=config.max_materials,
+            restrictions=config.restrictions,
+        ),
+    )
+
+
 @router.get("/{config_id}", response_model=LLMConfigResponse)
 async def get_config(
     config_id: int,
     db: AsyncSession = Depends(get_db),
-    teacher: User = Depends(require_role(UserRole.teacher)),
+    user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
 ):
-    result = await db.execute(
-        select(LLMConfig).where(
-            LLMConfig.id == config_id,
-            LLMConfig.teacher_id == teacher.id,
+    if user.role == UserRole.admin:
+        result = await db.execute(
+            select(LLMConfig).where(LLMConfig.id == config_id)
         )
-    )
+    else:
+        result = await db.execute(
+            select(LLMConfig).where(
+                LLMConfig.id == config_id,
+                LLMConfig.teacher_id == user.id,
+            )
+        )
     config = result.scalar_one_or_none()
     if not config:
         raise NotFoundException("Config not found")
@@ -219,14 +266,19 @@ async def get_active_config(teacher_id: int, db: AsyncSession) -> LLMConfig | No
 async def assign_config_to_student(
     req: AssignConfigRequest,
     db: AsyncSession = Depends(get_db),
-    teacher: User = Depends(require_role(UserRole.teacher)),
+    user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
 ):
-    config_result = await db.execute(
-        select(LLMConfig).where(
-            LLMConfig.id == req.config_id,
-            LLMConfig.teacher_id == teacher.id,
+    if user.role == UserRole.admin:
+        config_result = await db.execute(
+            select(LLMConfig).where(LLMConfig.id == req.config_id)
         )
-    )
+    else:
+        config_result = await db.execute(
+            select(LLMConfig).where(
+                LLMConfig.id == req.config_id,
+                LLMConfig.teacher_id == user.id,
+            )
+        )
     config = config_result.scalar_one_or_none()
     if not config:
         raise NotFoundException("Config not found")
@@ -241,19 +293,18 @@ async def assign_config_to_student(
     if not student:
         raise NotFoundException("Student not found")
 
-    existing_result = await db.execute(
+    existing_assignments = await db.execute(
         select(StudentLLMConfig).where(
             StudentLLMConfig.student_id == req.student_id,
-            StudentLLMConfig.config_id == req.config_id,
         )
     )
-    if existing_result.scalar_one_or_none():
-        raise ForbiddenException("Config already assigned to this student")
+    for old in existing_assignments.scalars().all():
+        await db.delete(old)
 
     assignment = StudentLLMConfig(
         student_id=req.student_id,
         config_id=req.config_id,
-        teacher_id=teacher.id,
+        teacher_id=user.id,
     )
     db.add(assignment)
     await db.commit()
@@ -283,7 +334,7 @@ async def assign_config_to_student(
 async def list_student_configs(
     student_id: int,
     db: AsyncSession = Depends(get_db),
-    teacher: User = Depends(require_role(UserRole.teacher)),
+    user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
 ):
     student_result = await db.execute(
         select(User).where(
@@ -337,14 +388,21 @@ async def list_student_configs(
 async def remove_config_assignment(
     assignment_id: int,
     db: AsyncSession = Depends(get_db),
-    teacher: User = Depends(require_role(UserRole.teacher)),
+    user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
 ):
-    result = await db.execute(
-        select(StudentLLMConfig).where(
-            StudentLLMConfig.id == assignment_id,
-            StudentLLMConfig.teacher_id == teacher.id,
+    if user.role == UserRole.admin:
+        result = await db.execute(
+            select(StudentLLMConfig).where(
+                StudentLLMConfig.id == assignment_id,
+            )
         )
-    )
+    else:
+        result = await db.execute(
+            select(StudentLLMConfig).where(
+                StudentLLMConfig.id == assignment_id,
+                StudentLLMConfig.teacher_id == user.id,
+            )
+        )
     assignment = result.scalar_one_or_none()
     if not assignment:
         raise NotFoundException("Assignment not found")

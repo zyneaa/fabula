@@ -40,6 +40,7 @@ erDiagram
     conversations {
         int id PK
         int user_id FK
+        varchar title
         datetime created_at
     }
 
@@ -110,7 +111,9 @@ erDiagram
     system_configs {
         int id PK
         text system_prompt
+        varchar model_name
         float temperature
+        int max_materials
         float top_p
         float frequency_penalty
         float presence_penalty

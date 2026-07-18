@@ -68,6 +68,7 @@ def test_list_configs(client, mock_db, mock_teacher):
         provider="openrouter",
         model_name="openai/gpt-4o",
         is_active=True,
+        max_materials=5,
         created_at=datetime.now(timezone.utc),
     )
     mock_result = MagicMock()
@@ -100,6 +101,7 @@ def test_update_config(client, mock_db, mock_teacher):
         model_name="openai/gpt-4o",
         is_active=True,
         max_tokens=1000,
+        max_materials=5,
         created_at=datetime.now(timezone.utc),
     )
     mock_result = MagicMock()
@@ -122,6 +124,7 @@ def test_delete_config(client, mock_db, mock_teacher):
         provider="openrouter",
         model_name="openai/gpt-4o",
         is_active=True,
+        max_materials=5,
         created_at=datetime.now(timezone.utc),
     )
     mock_result = MagicMock()
@@ -142,6 +145,7 @@ def test_assign_config_to_student(client, mock_db, mock_teacher, mock_student):
         provider="openrouter",
         model_name="openai/gpt-4o",
         is_active=True,
+        max_materials=5,
         created_at=datetime.now(timezone.utc),
     )
     
@@ -152,7 +156,7 @@ def test_assign_config_to_student(client, mock_db, mock_teacher, mock_student):
     student_result.scalar_one_or_none.return_value = mock_student
     
     existing_result = MagicMock()
-    existing_result.scalar_one_or_none.return_value = None
+    existing_result.scalars.return_value.all.return_value = []
     
     call_count = [0]
     
@@ -168,6 +172,7 @@ def test_assign_config_to_student(client, mock_db, mock_teacher, mock_student):
     
     mock_db.execute = AsyncMock(side_effect=execute_side_effect)
     mock_db.add = MagicMock()
+    mock_db.delete = AsyncMock()
     mock_db.commit = AsyncMock()
     
     async def mock_refresh(obj):
@@ -197,6 +202,7 @@ def test_list_student_configs(client, mock_db, mock_teacher, mock_student):
         provider="openrouter",
         model_name="openai/gpt-4o",
         is_active=True,
+        max_materials=5,
         created_at=datetime.now(timezone.utc),
     )
     

@@ -2,12 +2,13 @@ import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import GeneratedContentViewer from '../components/GeneratedContentViewer';
 import {
   Plus, Bot, CloudUpload, X,
   ThumbsUp, ThumbsDown, Copy, Paperclip, Send,
   WandSparkles, ChevronRight, FileQuestion, FileText,
-  File, ClipboardList, Menu,
+  File, ClipboardList, Menu, SlidersHorizontal,
 } from 'lucide-react';
 
 function formatRelativeTime(dateStr) {
@@ -29,10 +30,11 @@ function formatRelativeTime(dateStr) {
 
 function conversationTitle(conv) {
   if (conv.title) return conv.title;
-  return `Chat #${conv.id}`;
+  return 'New Chat';
 }
 
 export default function Chat() {
+  const { user } = useAuth();
   const [conversations, setConversations] = useState([]);
   const [currentConversation, setCurrentConversation] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -46,19 +48,64 @@ export default function Chat() {
   const [genLog, setGenLog] = useState([]);
   const [showViewer, setShowViewer] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [hasConfig, setHasConfig] = useState(null);
+  const [maxMaterials, setMaxMaterials] = useState(5);
+  const [maxTokens, setMaxTokens] = useState(4096);
+  const [renamingConvId, setRenamingConvId] = useState(null);
+  const [renameText, setRenameText] = useState('');
+  const [greetingText] = useState(() => {
+    const greetings = ['What would you like to learn today?', 'What sparks your curiosity?', 'Ready to explore something new?', 'What question is on your mind?'];
+    return greetings[Math.floor(Math.random() * greetings.length)];
+  });
+  const [glowDots] = useState(() =>
+    Array.from({ length: 5 }, (_, i) => ({
+      top: `${10 + Math.random() * 70}%`,
+      left: `${10 + Math.random() * 70}%`,
+      delay: `${Math.random() * 4}s`,
+      duration: `${4 + Math.random() * 4}s`,
+      size: 4 + Math.random() * 6,
+      anim: `float${(i % 3) + 1}`,
+    }))
+  );
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
+  const skipNextFetch = useRef(false);
 
   useEffect(() => {
     fetchConversations();
+    checkConfig();
   }, []);
 
+  const checkConfig = async () => {
+    if (user?.role !== 'student') {
+      setHasConfig(true);
+      try {
+        const { data } = await api.get('/system-configs');
+        setMaxMaterials(data.max_materials ?? 5);
+        setMaxTokens(data.max_tokens ?? 4096);
+      } catch {
+        setMaxMaterials(5);
+        setMaxTokens(4096);
+      }
+      return;
+    }
+    try {
+      const { data } = await api.get('/llm-configs/me');
+      setHasConfig(true);
+      setMaxMaterials(data.config.max_materials ?? 5);
+      setMaxTokens(data.config.max_tokens ?? 4096);
+    } catch {
+      setHasConfig(false);
+    }
+  };
+
   useEffect(() => {
-    if (currentConversation) {
+    if (currentConversation && !skipNextFetch.current) {
       fetchMessages(currentConversation.id);
       fetchMaterials(currentConversation.id);
     }
+    skipNextFetch.current = false;
   }, [currentConversation]);
 
   useEffect(() => {
@@ -69,9 +116,6 @@ export default function Chat() {
     try {
       const { data } = await api.get('/chat/conversations');
       setConversations(data);
-      if (data.length > 0) {
-        setCurrentConversation(data[0]);
-      }
     } catch {
       setError('Failed to load conversations');
     } finally {
@@ -97,17 +141,13 @@ export default function Chat() {
     }
   };
 
-  const handleNewConversation = async () => {
-    try {
-      const { data } = await api.post('/chat/conversations');
-      const newConv = { id: data.id, created_at: data.created_at, message_count: 0 };
-      setConversations([newConv, ...conversations]);
-      setCurrentConversation(newConv);
-      setMessages([]);
-      setMaterials([]);
-    } catch {
-      setError('Failed to create conversation');
-    }
+  const handleNewConversation = () => {
+    setCurrentConversation(null);
+    setMessages([]);
+    setMaterials([]);
+    setGenLog([]);
+    setError('');
+    setSuccess('');
   };
 
   const handleFileUpload = async (e) => {
@@ -140,6 +180,7 @@ export default function Chat() {
 
   const handleGenerateAction = async (action) => {
     if (!currentConversation) return;
+    if (!hasConfig) return;
     setGenerating(true);
     setError('');
     setSuccess('');
@@ -160,8 +201,35 @@ export default function Chat() {
     }
   };
 
+  const handleStartRename = (conv) => {
+    setRenamingConvId(conv.id);
+    setRenameText(conv.title || '');
+  };
+
+  const handleSubmitRename = async (convId) => {
+    const text = renameText.trim();
+    if (!text) {
+      setRenamingConvId(null);
+      return;
+    }
+    try {
+      await api.patch(`/chat/conversations/${convId}`, { title: text });
+      setConversations((prev) =>
+        prev.map((c) => (c.id === convId ? { ...c, title: text } : c))
+      );
+      if (currentConversation?.id === convId) {
+        setCurrentConversation((prev) => ({ ...prev, title: text }));
+      }
+    } catch {
+      setError('Failed to rename');
+    } finally {
+      setRenamingConvId(null);
+    }
+  };
+
   const handleSummarize = async () => {
     if (!currentConversation || sending) return;
+    if (!hasConfig) return;
     setQuery('Please summarize all the sources in this conversation, highlighting the key insights.');
     setTimeout(() => {
       const form = document.getElementById('chat-form');
@@ -171,30 +239,54 @@ export default function Chat() {
 
   const handleSendQuery = async (e) => {
     e.preventDefault();
-    if (!query.trim() || !currentConversation || sending) return;
+    if (!query.trim() || sending) return;
+    if (!hasConfig) return;
 
     setSending(true);
     setError('');
 
-    const userMessage = {
-      id: Date.now(),
-      role: 'user',
-      content: query,
-      created_at: new Date().toISOString(),
-    };
-    setMessages([...messages, userMessage]);
     const sentQuery = query;
     setQuery('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
     try {
-      const { data } = await api.post(`/chat/conversations/${currentConversation.id}/query`, { query: sentQuery });
+      let convId, convData;
+
+      if (!currentConversation) {
+        const { data: newConv } = await api.post('/chat/conversations');
+        convData = { id: newConv.id, created_at: newConv.created_at, message_count: 0 };
+        skipNextFetch.current = true;
+        setCurrentConversation(convData);
+        setMessages([]);
+        setMaterials([]);
+        convId = newConv.id;
+      } else {
+        convId = currentConversation.id;
+        convData = currentConversation;
+      }
+
+      const userMessage = {
+        id: Date.now(),
+        role: 'user',
+        content: sentQuery,
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, userMessage]);
+
+      const { data } = await api.post(`/chat/conversations/${convId}/query`, { query: sentQuery });
       setMessages((prev) => [...prev, data]);
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === currentConversation.id ? { ...c, message_count: c.message_count + 2 } : c
-        )
-      );
+
+      if (!currentConversation) {
+        setConversations((prev) => [convData, ...prev]);
+        api.post(`/chat/conversations/${convId}/generate-title`).then(({ data: titleData }) => {
+          setConversations((prev) =>
+            prev.map((c) => (c.id === convId ? { ...c, title: titleData.title } : c))
+          );
+          setCurrentConversation((prev) =>
+            prev?.id === convId ? { ...prev, title: titleData.title } : prev
+          );
+        }).catch(() => {});
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to send query');
     } finally {
@@ -221,7 +313,7 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex flex-1 overflow-hidden relative">
+    <div className="flex flex-col flex-1 overflow-hidden relative">
       {/* History overlay */}
       {historyOpen && (
         <div className="absolute inset-0 z-20 flex">
@@ -244,12 +336,33 @@ export default function Chat() {
                 conversations.map((conv) => (
                   <div
                     key={conv.id}
-                    onClick={() => { setCurrentConversation(conv); setHistoryOpen(false); }}
+                    onClick={() => { if (renamingConvId !== conv.id) { setCurrentConversation(conv); setHistoryOpen(false); } }}
                     className={`px-3 py-2.5 rounded-lg cursor-pointer transition-colors hover:bg-surface-container-lowest${
                       currentConversation?.id === conv.id ? ' bg-surface-container-low border-l-2 border-primary pl-2.5' : ''
                     }`}
                   >
-                    <p className="font-body text-sm font-semibold text-on-surface leading-tight truncate">{conversationTitle(conv)}</p>
+                    {renamingConvId === conv.id ? (
+                      <input
+                        value={renameText}
+                        onChange={(e) => setRenameText(e.target.value)}
+                        onBlur={() => handleSubmitRename(conv.id)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSubmitRename(conv.id); } if (e.key === 'Escape') setRenamingConvId(null); }}
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full bg-surface-container-highest border border-primary rounded px-2 py-1 font-body text-sm font-semibold text-on-surface outline-none"
+                      />
+                    ) : (
+                      <div className="flex items-center gap-1 group">
+                        <p className="font-body text-sm font-semibold text-on-surface leading-tight truncate flex-1">{conversationTitle(conv)}</p>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleStartRename(conv); }}
+                          className="opacity-0 group-hover:opacity-100 bg-none border-none text-on-surface-variant cursor-pointer p-0.5 rounded transition-opacity hover:text-primary flex items-center flex-shrink-0"
+                          title="Rename"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                      </div>
+                    )}
                     <p className="font-mono text-xs font-medium text-on-surface-variant mt-0.5">{formatRelativeTime(conv.created_at)}</p>
                   </div>
                 ))
@@ -260,12 +373,8 @@ export default function Chat() {
         </div>
       )}
 
-      <section className="flex-1 flex flex-col bg-surface-bright overflow-hidden min-w-0">
-        {error && <div className="p-3 text-sm bg-error-container text-on-error-container m-0 rounded-none">{error}</div>}
-        {success && <div className="p-3 text-sm bg-[#d1fae5] text-[#065f46] m-0 rounded-none">{success}</div>}
-        {generating && <div className="p-3 text-sm bg-surface-container text-on-surface m-0 rounded-none flex items-center gap-2"><div className="loading-spinner" style={{width: 14, height: 14, borderWidth: 2}} /><span>Generating...</span></div>}
-
-        <div className="px-4 py-2.5 bg-surface border-b border-outline-variant flex items-center gap-3 flex-shrink-0">
+      <div className="flex border-b border-outline-variant bg-surface flex-shrink-0">
+        <div className="flex-1 flex items-center gap-3 px-4 py-2.5 min-w-0">
           <button onClick={() => setHistoryOpen(true)} className="bg-none border-none cursor-pointer text-on-surface-variant p-1.5 rounded-lg transition-colors hover:bg-surface-container-highest flex items-center" title="Open history">
             <Menu size={20} />
           </button>
@@ -274,7 +383,10 @@ export default function Chat() {
               <CloudUpload size={16} />
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="font-mono text-[11px] font-medium text-on-surface-variant uppercase tracking-wider mb-0.5">Context Source</span>
+              <span className="font-mono text-[11px] font-medium text-on-surface-variant uppercase tracking-wider mb-0.5 inline-flex items-center gap-1.5">
+                <span className="w-1 h-1 bg-outline-variant rotate-45 flex-shrink-0" />
+                Context Source
+              </span>
               <div className="flex gap-1.5 items-center flex-wrap">
                 {materials.map((m) => (
                   <span key={m.id} className="bg-surface-container-highest px-2 py-0.5 rounded-full font-mono text-[11px] font-medium text-on-surface border border-outline-variant inline-flex items-center gap-0.5">
@@ -292,8 +404,26 @@ export default function Chat() {
             </div>
           </div>
         </div>
+        <div className="w-[280px] flex-shrink-0 flex items-center px-5 py-2.5 border-l border-outline-variant gap-3">
+          <span className="w-1.5 h-1.5 bg-outline-variant rotate-45 flex-shrink-0" />
+          <span className="font-mono text-xs font-medium text-on-surface-variant uppercase tracking-wider">Actions</span>
+        </div>
+      </div>
 
-        {showViewer && currentConversation && (
+      <div className="flex flex-1 overflow-hidden">
+        <section className="flex-1 flex flex-col bg-surface-bright overflow-hidden min-w-0 relative">
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            <div className="absolute w-[900px] h-[500px] rounded-[50%] opacity-20 pointer-events-none" style={{ background: 'linear-gradient(135deg, var(--primary), var(--primary-container))', filter: 'blur(80px)', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
+            <div className="absolute inset-0 pointer-events-none opacity-[0.04]" style={{ backgroundImage: 'linear-gradient(var(--primary) 1px, transparent 1px), linear-gradient(90deg, var(--primary) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+            {glowDots.map((dot, i) => (
+              <div key={i} className="absolute rounded-full pointer-events-none" style={{ width: dot.size, height: dot.size, top: dot.top, left: dot.left, background: 'var(--primary)', boxShadow: '0 0 12px 4px var(--primary)', animation: `${dot.anim} ${dot.duration}s ease-in-out ${dot.delay} infinite`, opacity: 0.5 }} />
+            ))}
+          </div>
+          {error && <div className="p-3 text-sm bg-error-container text-on-error-container m-0 rounded-none">{error}</div>}
+          {success && <div className="p-3 text-sm bg-[#d1fae5] text-[#065f46] m-0 rounded-none">{success}</div>}
+          {generating && <div className="p-3 text-sm bg-surface-container text-on-surface m-0 rounded-none flex items-center gap-2"><div className="loading-spinner" style={{width: 14, height: 14, borderWidth: 2}} /><span>Generating...</span></div>}
+
+          {showViewer && currentConversation && (
           <GeneratedContentViewer
             conversationId={currentConversation.id}
             type={showViewer}
@@ -301,9 +431,51 @@ export default function Chat() {
           />
         )}
 
-        <div className="flex-1 overflow-x-hidden overflow-y-auto custom-scrollbar">
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center text-on-surface-variant px-6">
+        <div className="flex-1 overflow-x-hidden overflow-y-auto custom-scrollbar relative z-10">
+          {!hasConfig && user?.role === 'student' ? (
+            <div className="flex flex-col items-center justify-center h-full text-center px-6">
+              <div className="w-14 h-14 rounded-full bg-surface-container-highest text-on-surface-variant flex items-center justify-center mb-4">
+                <SlidersHorizontal size={28} />
+              </div>
+              <p className="font-display text-lg font-semibold text-on-surface mb-1">No LLM Config Assigned</p>
+              <p className="text-sm text-on-surface-variant max-w-sm">
+                You need an LLM configuration to use chat, generate notes, and create quizzes. Contact your teacher to get one assigned.
+              </p>
+            </div>
+          ) : !currentConversation ? (
+            <div className="flex flex-col items-center justify-center h-full text-center px-6 greeting-enter relative z-10">
+              <p className="font-mono text-2xl sm:text-3xl font-semibold uppercase tracking-wider text-on-surface relative">
+                {greetingText}
+              </p>
+              <div className="w-full max-w-[640px] p-2 bg-surface rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.06)] flex items-end gap-1.5 relative">
+                <textarea
+                  ref={textareaRef}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onInput={handleTextareaInput}
+                  placeholder="Ask anything..."
+                  disabled={sending || !hasConfig}
+                  rows={1}
+                  autoFocus
+                  className="flex-1 bg-surface border-none outline-none resize-none font-body text-sm leading-6 text-on-surface max-h-[160px] py-2 px-3 placeholder:text-on-surface-variant placeholder:opacity-60 rounded-xl"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey && hasConfig) {
+                      e.preventDefault();
+                      handleSendQuery(e);
+                    }
+                  }}
+                />
+                <button type="button" onClick={(e) => handleSendQuery(e)} disabled={sending || !query.trim() || !hasConfig} title={!hasConfig ? 'No LLM config assigned' : ''} className="bg-primary text-on-primary border-none p-2.5 rounded-xl cursor-pointer flex items-center transition-opacity hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100">
+                  <Send size={18} />
+                </button>
+              </div>
+            </div>
+          ) : messages.length === 0 && currentConversation ? (
+            <div className="flex flex-col items-center justify-center h-full text-center text-on-surface-variant px-6 relative">
+              <span className="absolute top-2 left-2 font-mono text-sm text-outline-variant select-none leading-none font-bold">&#x250F;</span>
+              <span className="absolute top-2 right-2 font-mono text-sm text-outline-variant select-none leading-none font-bold">&#x2513;</span>
+              <span className="absolute bottom-2 left-2 font-mono text-sm text-outline-variant select-none leading-none font-bold">&#x2517;</span>
+              <span className="absolute bottom-2 right-2 font-mono text-sm text-outline-variant select-none leading-none font-bold">&#x251B;</span>
               <div className="w-14 h-14 rounded-full bg-primary-fixed text-primary flex items-center justify-center mb-4">
                 <Bot size={28} />
               </div>
@@ -311,7 +483,7 @@ export default function Chat() {
               <p className="text-sm text-on-surface-variant">Upload sources and ask questions to get started.</p>
             </div>
           ) : (
-            <div className="max-w-[768px] mx-auto flex flex-col gap-6 px-6 py-8">
+            <div className="max-w-[768px] mx-auto flex flex-col gap-8 px-6 py-8 chat-messages-enter">
               {messages.map((msg) =>
                 msg.role === 'user' ? (
                   <div key={msg.id} className="flex flex-col items-end">
@@ -328,8 +500,8 @@ export default function Chat() {
                       </div>
                       <span className="font-mono text-xs font-bold text-primary">Assistant</span>
                     </div>
-                    <div className="max-w-[85%] px-5 py-5 bg-surface-container-lowest text-on-surface rounded-2xl rounded-bl-md border border-outline-variant shadow-[0_1px_3px_rgba(0,0,0,0.05)] leading-relaxed">
-                      <div className="chat-msg-content text-sm">
+                    <div className="max-w-[85%] px-6 py-5 bg-surface-container-lowest text-on-surface rounded-2xl rounded-bl-md border border-outline-variant shadow-[0_1px_3px_rgba(0,0,0,0.05)] leading-relaxed">
+                      <div className="markdown-content text-sm">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                       </div>
                     </div>
@@ -358,9 +530,10 @@ export default function Chat() {
           )}
         </div>
 
+        {currentConversation && (
         <div className="px-4 pb-4 pt-2 flex-shrink-0">
           <form id="chat-form" onSubmit={handleSendQuery} className="max-w-[768px] mx-auto p-2 bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.06)] flex items-end gap-1.5">
-            <button type="button" onClick={() => fileInputRef.current?.click()} className="bg-none border-none text-on-surface-variant cursor-pointer p-2 rounded-lg flex items-center transition-colors hover:text-primary hover:bg-surface-container-low">
+            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={!hasConfig} title={!hasConfig ? 'No LLM config assigned' : ''} className="bg-none border-none text-on-surface-variant cursor-pointer p-2 rounded-lg flex items-center transition-colors hover:text-primary hover:bg-surface-container-low disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-on-surface-variant disabled:hover:bg-transparent">
               <Paperclip size={18} />
             </button>
             <textarea
@@ -368,32 +541,30 @@ export default function Chat() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onInput={handleTextareaInput}
-              placeholder="Ask your knowledge base..."
-              disabled={sending}
+              placeholder={!hasConfig ? 'No LLM config assigned...' : 'Ask your knowledge base...'}
+              disabled={sending || !hasConfig}
               rows={1}
               className="flex-1 bg-transparent border-none outline-none resize-none font-body text-sm leading-6 text-on-surface max-h-[160px] py-2 placeholder:text-on-surface-variant placeholder:opacity-60"
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
+                if (e.key === 'Enter' && !e.shiftKey && hasConfig) {
                   e.preventDefault();
                   handleSendQuery(e);
                 }
               }}
             />
-            <button type="submit" disabled={sending || !query.trim()} className="bg-primary text-on-primary border-none p-2.5 rounded-xl cursor-pointer flex items-center transition-opacity hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100">
+            <button type="submit" disabled={sending || !query.trim() || !hasConfig} title={!hasConfig ? 'No LLM config assigned' : ''} className="bg-primary text-on-primary border-none p-2.5 rounded-xl cursor-pointer flex items-center transition-opacity hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100">
               <Send size={18} />
             </button>
           </form>
         </div>
+        )}
       </section>
 
       <section className="w-[280px] flex-shrink-0 bg-surface border-l border-outline-variant flex flex-col overflow-y-auto hidden lg:flex">
-        <div className="px-5 py-4 border-b border-outline-variant">
-          <span className="font-mono text-xs font-medium text-on-surface-variant uppercase tracking-wider">Actions</span>
-        </div>
         <div className="flex flex-col gap-3 p-4">
-          <button type="button" onClick={() => handleGenerateAction('notes')} className="flex items-center justify-between w-full px-4 py-3 bg-white border border-outline-variant rounded-lg cursor-pointer transition-[border-color,box-shadow] hover:border-primary hover:shadow-[0_2px_8px_rgba(85,87,160,0.1)] text-left">
+          <button type="button" onClick={() => handleGenerateAction('notes')} disabled={!hasConfig} title={!hasConfig ? 'No LLM config assigned' : ''} className="flex items-center justify-between w-full px-4 py-3 bg-white border border-outline-variant rounded-lg cursor-pointer transition-[border-color,box-shadow] hover:border-primary hover:shadow-[0_2px_8px_rgba(85,87,160,0.1)] text-left disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-outline-variant disabled:hover:shadow-none">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary-fixed text-primary flex items-center">
+              <div className="p-2 rounded-lg bg-primary-container text-on-primary-container flex items-center">
                 <WandSparkles size={18} />
               </div>
               <div className="flex flex-col">
@@ -404,9 +575,9 @@ export default function Chat() {
             <ChevronRight size={18} className="text-on-surface-variant" />
           </button>
 
-          <button type="button" onClick={() => handleGenerateAction('quizzes')} className="flex items-center justify-between w-full px-4 py-3 bg-white border border-outline-variant rounded-lg cursor-pointer transition-[border-color,box-shadow] hover:border-primary hover:shadow-[0_2px_8px_rgba(85,87,160,0.1)] text-left">
+          <button type="button" onClick={() => handleGenerateAction('quizzes')} disabled={!hasConfig} title={!hasConfig ? 'No LLM config assigned' : ''} className="flex items-center justify-between w-full px-4 py-3 bg-white border border-outline-variant rounded-lg cursor-pointer transition-[border-color,box-shadow] hover:border-primary hover:shadow-[0_2px_8px_rgba(85,87,160,0.1)] text-left disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-outline-variant disabled:hover:shadow-none">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-tertiary-fixed text-tertiary flex items-center">
+              <div className="p-2 rounded-lg bg-tertiary-container text-on-tertiary-container flex items-center">
                 <FileQuestion size={18} />
               </div>
               <div className="flex flex-col">
@@ -417,9 +588,9 @@ export default function Chat() {
             <ChevronRight size={18} className="text-on-surface-variant" />
           </button>
 
-          <button type="button" onClick={handleSummarize} className="flex items-center justify-between w-full px-4 py-3 bg-white border border-outline-variant rounded-lg cursor-pointer transition-[border-color,box-shadow] hover:border-primary hover:shadow-[0_2px_8px_rgba(85,87,160,0.1)] text-left">
+          <button type="button" onClick={handleSummarize} disabled={!hasConfig} title={!hasConfig ? 'No LLM config assigned' : ''} className="flex items-center justify-between w-full px-4 py-3 bg-white border border-outline-variant rounded-lg cursor-pointer transition-[border-color,box-shadow] hover:border-primary hover:shadow-[0_2px_8px_rgba(85,87,160,0.1)] text-left disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-outline-variant disabled:hover:shadow-none">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-surface-container-highest text-secondary flex items-center">
+              <div className="p-2 rounded-lg bg-secondary text-on-secondary flex items-center">
                 <FileText size={18} />
               </div>
               <div className="flex flex-col">
@@ -432,7 +603,7 @@ export default function Chat() {
 
           <button type="button" onClick={() => setShowViewer('notes')} className="flex items-center justify-between w-full px-4 py-3 bg-white border border-outline-variant rounded-lg cursor-pointer transition-[border-color,box-shadow] hover:border-primary hover:shadow-[0_2px_8px_rgba(85,87,160,0.1)] text-left opacity-80">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-surface-container-highest text-secondary flex items-center">
+              <div className="p-2 rounded-lg bg-primary-fixed text-primary flex items-center">
                 <File size={18} />
               </div>
               <div className="flex flex-col">
@@ -445,7 +616,7 @@ export default function Chat() {
 
           <button type="button" onClick={() => setShowViewer('quizzes')} className="flex items-center justify-between w-full px-4 py-3 bg-white border border-outline-variant rounded-lg cursor-pointer transition-[border-color,box-shadow] hover:border-primary hover:shadow-[0_2px_8px_rgba(85,87,160,0.1)] text-left opacity-80">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-surface-container-highest text-secondary flex items-center">
+              <div className="p-2 rounded-lg bg-tertiary-fixed text-tertiary flex items-center">
                 <ClipboardList size={18} />
               </div>
               <div className="flex flex-col">
@@ -473,14 +644,35 @@ export default function Chat() {
           </div>
         )}
 
+        <div className="mx-4 mb-2 flex items-center gap-2 text-outline-variant">
+          <div className="flex-1 h-px bg-outline-variant" />
+          <span className="w-1.5 h-1.5 bg-outline-variant rotate-45 flex-shrink-0" />
+          <div className="flex-1 h-px bg-outline-variant" />
+        </div>
+
         <div className="mt-auto mx-4 mb-4 p-4 bg-surface-container-low rounded-lg border border-outline-variant">
+          <h4 className="font-mono text-xs font-semibold text-on-surface mb-2">Token Limit</h4>
+          <div className="w-full h-1.5 bg-outline-variant rounded-full overflow-hidden mb-2">
+            <div className="h-full bg-tertiary rounded-full" style={{ width: '100%' }} />
+          </div>
+          <p className="font-mono text-[11px] font-medium text-on-surface-variant">{maxTokens.toLocaleString()} tokens max per response</p>
+        </div>
+
+        <div className="mx-4 mb-2 flex items-center gap-2 text-outline-variant">
+          <div className="flex-1 h-px bg-outline-variant" />
+          <span className="w-1.5 h-1.5 bg-outline-variant rotate-45 flex-shrink-0" />
+          <div className="flex-1 h-px bg-outline-variant" />
+        </div>
+
+        <div className="mx-4 mb-4 p-4 bg-surface-container-low rounded-lg border border-outline-variant">
           <h4 className="font-mono text-xs font-semibold text-on-surface mb-2">Workspace Health</h4>
           <div className="w-full h-1.5 bg-outline-variant rounded-full overflow-hidden mb-2">
-            <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${Math.min((materials.length / 5) * 100, 100)}%` }} />
+            <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${Math.min((materials.length / maxMaterials) * 100, 100)}%` }} />
           </div>
-          <p className="font-mono text-[11px] font-medium text-on-surface-variant">{materials.length} / 5 sources used</p>
+          <p className="font-mono text-[11px] font-medium text-on-surface-variant">{materials.length} / {maxMaterials} sources used</p>
         </div>
       </section>
+      </div>
     </div>
   );
 }
