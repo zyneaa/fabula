@@ -20,6 +20,13 @@ class CreateUniInfoRequest(BaseModel):
     metadata_json: dict | None = None
 
 
+class UpdateUniInfoRequest(BaseModel):
+    category: UniInfoCategory | None = None
+    title: str | None = None
+    content: str | None = None
+    metadata_json: dict | None = None
+
+
 async def require_teacher_or_admin(
     current_user: User = Depends(get_current_user),
 ) -> User:
@@ -102,10 +109,7 @@ async def get_uni_info(
 @router.put("/{uni_info_id}")
 async def update_uni_info(
     uni_info_id: int,
-    category: UniInfoCategory | None = None,
-    title: str | None = None,
-    content: str | None = None,
-    metadata_json: dict | None = None,
+    body: UpdateUniInfoRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_teacher_or_admin),
 ):
@@ -117,14 +121,14 @@ async def update_uni_info(
     if item.teacher_id != current_user.id and current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Not authorized to edit this entry")
 
-    if category is not None:
-        item.category = category
-    if title is not None:
-        item.title = title
-    if content is not None:
-        item.content = content
-    if metadata_json is not None:
-        item.metadata_json = metadata_json
+    if body.category is not None:
+        item.category = body.category
+    if body.title is not None:
+        item.title = body.title
+    if body.content is not None:
+        item.content = body.content
+    if body.metadata_json is not None:
+        item.metadata_json = body.metadata_json
 
     await db.commit()
     return {"message": "Uni info updated"}
