@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import api from '../services/api';
@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import GeneratedContentViewer from '../components/GeneratedContentViewer';
 import {
   Plus, Bot, CloudUpload, X,
-  ThumbsUp, ThumbsDown, Copy, Paperclip, Send,
+  Copy, Paperclip, Send, Square,
   WandSparkles, ChevronRight, FileQuestion, FileText,
   File, ClipboardList, Menu, SlidersHorizontal,
 } from 'lucide-react';
@@ -41,7 +41,7 @@ export default function Chat() {
   const [query, setQuery] = useState('');
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
+  const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -229,8 +229,19 @@ export default function Chat() {
     }
   };
 
+  const handleDeleteConversation = async (convId) => {
+    if (!window.confirm('Delete this conversation?')) return;
+    try {
+      await api.delete(`/chat/conversations/${convId}`);
+      setConversations((prev) => prev.filter((c) => c.id !== convId));
+      if (currentConversation?.id === convId) setCurrentConversation(null);
+    } catch {
+      setError('Failed to delete conversation');
+    }
+  };
+
   const handleSummarize = async () => {
-    if (!currentConversation || sending) return;
+    if (!currentConversation || streaming) return;
     if (!hasConfig) return;
     setQuery('Please summarize all the sources in this conversation, highlighting the key insights.');
     setTimeout(() => {
@@ -241,10 +252,10 @@ export default function Chat() {
 
   const handleSendQuery = async (e) => {
     e.preventDefault();
-    if (!query.trim() || sending) return;
+    if (!query.trim() || streaming) return;
     if (!hasConfig) return;
 
-    setSending(true);
+    setStreaming(true);
     setError('');
 
     const sentQuery = query;
@@ -253,8 +264,9 @@ export default function Chat() {
 
     try {
       let convId, convData;
+      const isNew = !currentConversation;
 
-      if (!currentConversation) {
+      if (isNew) {
         const { data: newConv } = await api.post('/chat/conversations');
         convData = { id: newConv.id, created_at: newConv.created_at, message_count: 0 };
         skipNextFetch.current = true;
@@ -267,18 +279,58 @@ export default function Chat() {
         convData = currentConversation;
       }
 
-      const userMessage = {
-        id: Date.now(),
+      // Add user message immediately
+      const userMsgId = Date.now();
+      setMessages((prev) => [...prev, {
+        id: userMsgId,
         role: 'user',
         content: sentQuery,
         created_at: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, userMessage]);
+      }]);
 
+// Create empty assistant message for streaming
+      const streamMsgId = userMsgId + 1;
+      setMessages((prev) => [...prev, {
+        id: streamMsgId,
+        role: 'assistant',
+        content: '',
+        created_at: new Date().toISOString(),
+        _streaming: true,
+        _thinking: true,
+      }]);
+
+      // Fetch full response from backend
       const { data } = await api.post(`/chat/conversations/${convId}/query`, { query: sentQuery });
-      setMessages((prev) => [...prev, data]);
+      const fullContent = data.content;
 
-      if (!currentConversation) {
+      // Remove thinking indicator, start streaming
+      setMessages((prev) =>
+        prev.map((m) => m.id === streamMsgId
+          ? { ...m, _thinking: false }
+          : m
+        )
+      );
+
+      // Stream the response character by character on the frontend
+      for (let i = 0; i < fullContent.length; i++) {
+        await new Promise(r => setTimeout(r, 2));
+        setMessages((prev) =>
+          prev.map((m) => m.id === streamMsgId
+            ? { ...m, content: m.content + fullContent[i] }
+            : m
+          )
+        );
+      }
+
+      // Replace streaming message with final message from server
+      setMessages((prev) =>
+        prev.map((m) => m.id === streamMsgId
+          ? { id: data.id, role: 'assistant', content: data.content, created_at: data.created_at }
+          : m
+        )
+      );
+
+      if (isNew) {
         setConversations((prev) => [convData, ...prev]);
         api.post(`/chat/conversations/${convId}/generate-title`).then(({ data: titleData }) => {
           setConversations((prev) =>
@@ -290,9 +342,13 @@ export default function Chat() {
         }).catch(() => {});
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to send query');
+      // On error, mark streaming message as done (keep partial content)
+      setMessages((prev) =>
+        prev.map((m) => m._streaming ? { ...m, _streaming: false } : m)
+      );
+      setError(err?.message || 'Failed to send query');
     } finally {
-      setSending(false);
+      setStreaming(false);
     }
   };
 
@@ -363,6 +419,13 @@ export default function Chat() {
                         >
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                         </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteConversation(conv.id); }}
+                          className="opacity-0 group-hover:opacity-100 bg-none border-none text-on-surface-variant cursor-pointer p-0.5 rounded transition-opacity hover:text-error flex items-center flex-shrink-0"
+                          title="Delete"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                        </button>
                       </div>
                     )}
                     <p className="font-mono text-xs font-medium text-on-surface-variant mt-0.5">{formatRelativeTime(conv.created_at)}</p>
@@ -417,7 +480,7 @@ export default function Chat() {
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
             <div className="absolute w-[900px] h-[500px] rounded-[50%] opacity-20 pointer-events-none" style={{ background: 'linear-gradient(135deg, var(--primary), var(--primary-container))', filter: 'blur(80px)', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
             <div className="absolute inset-0 pointer-events-none opacity-[0.04]" style={{ backgroundImage: 'linear-gradient(var(--primary) 1px, transparent 1px), linear-gradient(90deg, var(--primary) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
-            {glowDots.map((dot, i) => (
+            {!currentConversation && messages.length === 0 && glowDots.map((dot, i) => (
               <div key={i} className="absolute rounded-full pointer-events-none" style={{ width: dot.size, height: dot.size, top: dot.top, left: dot.left, background: 'var(--primary)', boxShadow: '0 0 12px 4px var(--primary)', animation: `${dot.anim} ${dot.duration}s ease-in-out ${dot.delay} infinite`, opacity: 0.5 }} />
             ))}
           </div>
@@ -456,7 +519,7 @@ export default function Chat() {
                   onChange={(e) => setQuery(e.target.value)}
                   onInput={handleTextareaInput}
                   placeholder="Ask anything..."
-                  disabled={sending || !hasConfig}
+                  disabled={streaming || !hasConfig}
                   rows={1}
                   autoFocus
                   className="flex-1 bg-surface border-none outline-none resize-none font-body text-sm leading-6 text-on-surface max-h-[160px] py-2 px-3 placeholder:text-on-surface-variant placeholder:opacity-60 rounded-xl"
@@ -467,7 +530,7 @@ export default function Chat() {
                     }
                   }}
                 />
-                <button type="button" onClick={(e) => handleSendQuery(e)} disabled={sending || !query.trim() || !hasConfig} title={!hasConfig ? 'No LLM config assigned' : ''} className="bg-primary text-on-primary border-none p-2.5 rounded-xl cursor-pointer flex items-center transition-opacity hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100">
+                <button type="button" onClick={(e) => handleSendQuery(e)} disabled={streaming || !query.trim() || !hasConfig} title={!hasConfig ? 'No LLM config assigned' : ''} className="bg-primary text-on-primary border-none p-2.5 rounded-xl cursor-pointer flex items-center transition-opacity hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100">
                   <Send size={18} />
                 </button>
               </div>
@@ -489,7 +552,7 @@ export default function Chat() {
               {messages.map((msg) =>
                 msg.role === 'user' ? (
                   <div key={msg.id} className="flex flex-col items-end">
-                    <div className="max-w-[80%] px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.05)] leading-relaxed bg-surface-container-highest text-on-surface rounded-2xl rounded-br-md">
+                    <div className="max-w-[80%] px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.05)] leading-relaxed bg-white text-on-surface rounded-2xl rounded-br-md">
                       <p className="text-sm">{msg.content}</p>
                     </div>
                     <span className="font-mono text-[11px] font-medium text-on-surface-variant mt-1.5">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
@@ -502,30 +565,31 @@ export default function Chat() {
                       </div>
                       <span className="font-mono text-xs font-bold text-primary">Assistant</span>
                     </div>
-                    <div className="max-w-[85%] px-6 py-5 bg-surface-container-lowest text-on-surface rounded-2xl rounded-bl-md border border-outline-variant shadow-[0_1px_3px_rgba(0,0,0,0.05)] leading-relaxed">
+                    <div className="max-w-[85%] px-0 py-2 bg-transparent text-on-surface leading-relaxed">
                       <div className="markdown-content text-sm">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                        {msg._thinking ? (
+                          <div className="flex items-center gap-2 text-on-surface-variant pl-1">
+                            <div className="flex gap-1">
+                              <div className="w-2 h-2 rounded-full bg-primary/50 animate-bounce" style={{animationDelay: '0ms'}} />
+                              <div className="w-2 h-2 rounded-full bg-primary/50 animate-bounce" style={{animationDelay: '150ms'}} />
+                              <div className="w-2 h-2 rounded-full bg-primary/50 animate-bounce" style={{animationDelay: '300ms'}} />
+                            </div>
+                            <span className="font-mono text-xs">Thinking...</span>
+                          </div>
+                        ) : (
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                        )}
                       </div>
                     </div>
+                    {!msg._streaming && (
                     <div className="flex gap-3 mt-2">
-                      <button type="button" className="flex items-center gap-1 bg-none border-none cursor-pointer text-on-surface-variant font-mono text-[11px] font-medium px-1 py-0.5 transition-colors hover:text-primary">
-                        <ThumbsUp size={14} />
-                      </button>
-                      <button type="button" className="flex items-center gap-1 bg-none border-none cursor-pointer text-on-surface-variant font-mono text-[11px] font-medium px-1 py-0.5 transition-colors hover:text-primary">
-                        <ThumbsDown size={14} />
-                      </button>
                       <button type="button" onClick={() => handleCopy(msg.content)} className="flex items-center gap-1 bg-none border-none cursor-pointer text-on-surface-variant font-mono text-[11px] font-medium px-1 py-0.5 transition-colors hover:text-primary">
                         <Copy size={14} /> Copy
                       </button>
                     </div>
+                    )}
                   </div>
                 )
-              )}
-              {sending && (
-                <div className="flex items-center gap-2 text-on-surface-variant pl-1">
-                  <div className="loading-spinner" style={{width: 16, height: 16, borderWidth: 2}} />
-                  <span className="font-mono text-xs">Assistant is thinking...</span>
-                </div>
               )}
               <div ref={messagesEndRef} />
             </div>
@@ -544,7 +608,7 @@ export default function Chat() {
               onChange={(e) => setQuery(e.target.value)}
               onInput={handleTextareaInput}
               placeholder={!hasConfig ? 'No LLM config assigned...' : 'Ask your knowledge base...'}
-              disabled={sending || !hasConfig}
+              disabled={streaming || !hasConfig}
               rows={1}
               className="flex-1 bg-transparent border-none outline-none resize-none font-body text-sm leading-6 text-on-surface max-h-[160px] py-2 placeholder:text-on-surface-variant placeholder:opacity-60"
               onKeyDown={(e) => {
@@ -554,9 +618,15 @@ export default function Chat() {
                 }
               }}
             />
-            <button type="submit" disabled={sending || !query.trim() || !hasConfig} title={!hasConfig ? 'No LLM config assigned' : ''} className="bg-primary text-on-primary border-none p-2.5 rounded-xl cursor-pointer flex items-center transition-opacity hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100">
-              <Send size={18} />
-            </button>
+            {streaming ? (
+              <button type="button" disabled className="bg-primary text-on-primary border-none p-2.5 rounded-xl cursor-pointer flex items-center transition-opacity opacity-70">
+                <Send size={18} />
+              </button>
+            ) : (
+              <button type="submit" disabled={!query.trim() || !hasConfig} title={!hasConfig ? 'No LLM config assigned' : ''} className="bg-primary text-on-primary border-none p-2.5 rounded-xl cursor-pointer flex items-center transition-opacity hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100">
+                <Send size={18} />
+              </button>
+            )}
           </form>
         </div>
         )}

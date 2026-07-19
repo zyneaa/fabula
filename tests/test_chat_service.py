@@ -144,10 +144,12 @@ async def test_process_student_query(mock_db, mock_conversation):
     mock_msg.role = MessageRole.assistant
     mock_msg.content = "AI response"
     
-    with patch('app.services.chat.add_message', new_callable=AsyncMock) as mock_add_msg, \
-         patch('app.services.chat.get_relevant_context', new_callable=AsyncMock) as mock_context, \
+    with patch('app.services.chat.get_conversation_messages', new_callable=AsyncMock) as mock_get_msgs, \
+         patch('app.services.chat.add_message', new_callable=AsyncMock) as mock_add_msg, \
+         patch('app.services.chat.get_conversation_context', new_callable=AsyncMock) as mock_context, \
          patch('app.services.chat.generate_with_student_config', new_callable=AsyncMock) as mock_llm:
         
+        mock_get_msgs.return_value = []
         mock_add_msg.return_value = mock_msg
         mock_context.return_value = "Some context"
         mock_llm.return_value = "AI response"
@@ -160,6 +162,7 @@ async def test_process_student_query(mock_db, mock_conversation):
         )
         
         assert result == mock_msg
-        mock_add_msg.assert_called()
-        mock_context.assert_called_once_with("What is CS101?", mock_db)
+        assert mock_add_msg.call_count == 2
+        mock_get_msgs.assert_called_once_with(1, mock_db)
+        mock_context.assert_called_once()
         mock_llm.assert_called_once()

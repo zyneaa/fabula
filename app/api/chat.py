@@ -1,15 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
+from app.models.chat import Conversation, MessageRole
 from app.services.chat import (
+    add_message,
     create_conversation,
+    delete_conversation,
     get_conversation,
     get_user_conversations,
     get_conversation_messages,
+    get_conversation_context,
     process_student_query,
     rename_conversation,
     generate_conversation_title,
@@ -148,6 +153,16 @@ async def rename_conversation_endpoint(
         "title": conversation.title,
         "created_at": conversation.created_at.isoformat(),
     }
+
+
+@router.delete("/conversations/{conversation_id}", status_code=204)
+async def delete_conversation_endpoint(
+    conversation_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not await delete_conversation(conversation_id, current_user.id, db):
+        raise HTTPException(status_code=404, detail="Conversation not found")
 
 
 @router.post("/conversations/{conversation_id}/generate-title")

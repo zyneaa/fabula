@@ -78,6 +78,19 @@ async def generate_conversation_title(
         return None
 
 
+async def delete_conversation(
+    conversation_id: int,
+    user_id: int,
+    db: AsyncSession,
+) -> bool:
+    conversation = await get_conversation(conversation_id, user_id, db)
+    if not conversation:
+        return False
+    await db.delete(conversation)
+    await db.commit()
+    return True
+
+
 async def get_user_conversations(
     user_id: int,
     db: AsyncSession,
@@ -204,6 +217,13 @@ async def process_student_query(
     4. Add assistant response to conversation
     5. Return the assistant message
     """
+# Build history from past messages (before saving current query)
+    past_messages = await get_conversation_messages(conversation_id, db)
+    history = []
+    for msg in past_messages:
+        if msg.role.value in ("user", "assistant"):
+            history.append({"role": msg.role.value, "content": msg.content})
+
     # Add user message
     user_message = await add_message(
         conversation_id=conversation_id,
@@ -228,9 +248,10 @@ Guidelines:
 
 Context:
 {context}"""
-    
+
     messages = [
         {"role": "system", "content": system_prompt.format(context=context)},
+        *history,
         {"role": "user", "content": query},
     ]
     
