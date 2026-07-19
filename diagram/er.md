@@ -17,6 +17,7 @@ erDiagram
     materials ||--o{ quizzes : "generates"
     materials ||--o{ exam_papers : "source_for"
     llm_configs ||--o{ student_llm_configs : "assigned_to"
+    system_configs ||--|| "" : "singleton"
 
     departments {
         int id PK
@@ -101,10 +102,9 @@ erDiagram
     uni_info {
         int id PK
         int teacher_id FK
-        enum category
+        enum category "timetable|event|course|misc"
         varchar title
         text content
-        json metadata_json
         datetime created_at
     }
 
@@ -131,6 +131,11 @@ erDiagram
         int max_tokens
         int max_materials
         json restrictions
+        text system_prompt
+        float temperature
+        float top_p
+        float frequency_penalty
+        float presence_penalty
         datetime created_at
     }
 
