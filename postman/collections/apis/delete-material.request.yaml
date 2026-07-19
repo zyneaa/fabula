@@ -1,9 +1,0 @@
-$kind: http-request
-name: delete-material
-url: http://localhost:8000/materials/1
-method: DELETE
-auth:
-  type: bearer
-  credentials:
-    token: "{{ACCESS_TOKEN}}"
-order: 4129612759280597
