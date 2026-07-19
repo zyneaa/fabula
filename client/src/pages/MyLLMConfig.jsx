@@ -43,7 +43,7 @@ export default function MyLLMConfig() {
   return (
     <div className="max-w-xl mx-auto">
       <div className="mb-6">
-        <h1 className="font-display text-3xl font-semibold text-on-surface">My LLM Config</h1>
+        <h1 className="font-display text-3xl font-semibold text-on-surface">Assigned LLM Config</h1>
       </div>
 
       {error && <div className="p-3 rounded-lg mb-4 text-sm bg-error-container text-on-error-container">{error}</div>}

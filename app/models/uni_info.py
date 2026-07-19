@@ -10,9 +10,8 @@ from app.models.user import Base
 class UniInfoCategory(str, enum.Enum):
     timetable = "timetable"
     event = "event"
-    directory = "directory"
     course = "course"
-    metadata = "metadata"
+    misc = "misc"
 
 
 class UniInfo(Base):

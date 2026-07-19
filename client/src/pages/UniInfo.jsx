@@ -6,6 +6,7 @@ import api from '../services/api';
 
 export default function UniInfo() {
     const { user } = useAuth();
+    const isAdmin = user?.role === 'admin';
     const [uniInfo, setUniInfo] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
@@ -78,7 +79,7 @@ export default function UniInfo() {
         <div className="max-w-container mx-auto">
             <div className="mb-6 flex justify-between items-center">
                 <h1 className="font-display text-3xl font-semibold text-on-surface">University Information</h1>
-                {user?.role !== 'student' && (
+                            {isAdmin && (
                     <button onClick={() => { setShowForm(!showForm); if (showForm) resetForm(); }} className={btnClass}>
                         {showForm ? 'Cancel' : '+ New Entry'}
                     </button>
@@ -95,7 +96,7 @@ export default function UniInfo() {
                             <option value="course">Course</option>
                             <option value="timetable">Timetable</option>
                             <option value="event">Event</option>
-                            <option value="directory">Directory</option>
+                            <option value="misc">Misc</option>
                         </select>
                     </div>
                     <div className="mb-6">
@@ -118,7 +119,7 @@ export default function UniInfo() {
                                 <span className="inline-block px-2 py-1 rounded-full text-xs font-medium capitalize bg-secondary-container text-on-secondary-container">{item.category}</span>
                                 <h3 className="font-mono text-xs font-semibold uppercase tracking-wider mt-2">{item.title}</h3>
                             </div>
-                            {user?.role !== 'student' && (
+                {isAdmin && (
                                 <div className="flex gap-2">
                                     <button onClick={() => handleEdit(item)} className="inline-flex items-center justify-center rounded-lg font-mono text-xs font-medium border border-solid cursor-pointer transition-colors bg-secondary-container text-on-secondary-container border-outline hover:bg-surface-container-high px-3 py-1.5 w-auto">Edit</button>
                                     <button onClick={() => handleDelete(item.id)} className="inline-flex items-center justify-center rounded-lg font-mono text-xs font-medium border border-solid cursor-pointer transition-colors bg-secondary-container text-on-secondary-container border-outline hover:bg-surface-container-high px-3 py-1.5 w-auto">Delete</button>

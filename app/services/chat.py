@@ -172,35 +172,57 @@ async def get_conversation_context(
                 for chunk in chunks:
                     context_parts.append(chunk.text)
 
-    # Search for relevant university info based on query
-    keywords = [word.lower() for word in query.split() if len(word) > 2]
-    if keywords:
-        from sqlalchemy import or_
+    # Check with LLM whether query is university-related
+    is_uni_query = await _classify_uni_query(query, user_id, db)
 
-        conditions = []
-        for keyword in keywords:
-            conditions.append(UniInfo.title.ilike(f"%{keyword}%"))
-            conditions.append(UniInfo.content.ilike(f"%{keyword}%"))
+    if is_uni_query:
+        # Search for relevant university info based on query
+        keywords = [word.lower() for word in query.split() if len(word) > 2]
+        if keywords:
+            from sqlalchemy import or_
 
-        if conditions:
-            uni_info_result = await db.execute(
-                select(UniInfo)
-                .where(or_(*conditions))
-                .order_by(UniInfo.created_at.desc())
-                .limit(5)
-            )
-            uni_info_entries = uni_info_result.scalars().all()
+            conditions = []
+            for keyword in keywords:
+                conditions.append(UniInfo.title.ilike(f"%{keyword}%"))
+                conditions.append(UniInfo.content.ilike(f"%{keyword}%"))
 
-            if uni_info_entries:
-                context_parts.append("\n\n=== UNIVERSITY INFORMATION ===")
-                for entry in uni_info_entries:
-                    context_parts.append(f"\n[{entry.category.value.upper()}] {entry.title}")
-                    context_parts.append(entry.content)
+            if conditions:
+                uni_info_result = await db.execute(
+                    select(UniInfo)
+                    .where(or_(*conditions))
+                    .order_by(UniInfo.created_at.desc())
+                    .limit(5)
+                )
+                uni_info_entries = uni_info_result.scalars().all()
+
+                if uni_info_entries:
+                    context_parts.append("\n\n=== UNIVERSITY INFORMATION ===")
+                    for entry in uni_info_entries:
+                        context_parts.append(f"\n[{entry.category.value.upper()}] {entry.title}")
+                        context_parts.append(entry.content)
 
     if not context_parts:
         return "No relevant materials or university information found."
 
     return "\n".join(context_parts)
+
+
+async def _classify_uni_query(query: str, user_id: int, db: AsyncSession) -> bool:
+    prompt = (
+        "You are a classifier for a university assistant. "
+        "Determine if the following question is about the university itself — "
+        "its timetables, events, courses, location, history, policies, staff, facilities, "
+        "or any other university-specific information.\n\n"
+        f"Question: {query}\n\n"
+        "Answer only 'yes' or 'no'."
+    )
+    try:
+        result = await generate_with_student_config(
+            [{"role": "user", "content": prompt}], user_id, db
+        )
+        return result.strip().lower().startswith("yes")
+    except Exception:
+        return False
 
 
 async def process_student_query(

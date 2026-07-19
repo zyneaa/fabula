@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import require_role
 from app.models.uni_info import UniInfo, UniInfoCategory
 from app.models.user import User, UserRole
 
@@ -27,19 +27,11 @@ class UpdateUniInfoRequest(BaseModel):
     metadata_json: dict | None = None
 
 
-async def require_teacher_or_admin(
-    current_user: User = Depends(get_current_user),
-) -> User:
-    if current_user.role not in [UserRole.teacher, UserRole.admin]:
-        raise HTTPException(status_code=403, detail="Only teachers can manage uni info")
-    return current_user
-
-
 @router.post("/")
 async def create_uni_info(
     body: CreateUniInfoRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_teacher_or_admin),
+    current_user: User = Depends(require_role(UserRole.admin)),
 ):
     uni_info = UniInfo(
         teacher_id=current_user.id,
@@ -60,7 +52,7 @@ async def create_uni_info(
 async def list_uni_info(
     category: UniInfoCategory | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
 ):
     query = select(UniInfo)
     if category:
@@ -88,7 +80,7 @@ async def list_uni_info(
 async def get_uni_info(
     uni_info_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
 ):
     result = await db.execute(select(UniInfo).where(UniInfo.id == uni_info_id))
     item = result.scalar_one_or_none()
@@ -111,15 +103,12 @@ async def update_uni_info(
     uni_info_id: int,
     body: UpdateUniInfoRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_teacher_or_admin),
+    current_user: User = Depends(require_role(UserRole.admin)),
 ):
     result = await db.execute(select(UniInfo).where(UniInfo.id == uni_info_id))
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Uni info not found")
-
-    if item.teacher_id != current_user.id and current_user.role != UserRole.admin:
-        raise HTTPException(status_code=403, detail="Not authorized to edit this entry")
 
     if body.category is not None:
         item.category = body.category
@@ -138,15 +127,12 @@ async def update_uni_info(
 async def delete_uni_info(
     uni_info_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_teacher_or_admin),
+    current_user: User = Depends(require_role(UserRole.admin)),
 ):
     result = await db.execute(select(UniInfo).where(UniInfo.id == uni_info_id))
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Uni info not found")
-    
-    if item.teacher_id != current_user.id and current_user.role != UserRole.admin:
-        raise HTTPException(status_code=403, detail="Not authorized to delete this entry")
 
     await db.delete(item)
     await db.commit()

@@ -1,5 +1,5 @@
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,30 +14,15 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/quizzes", tags=["quizzes"])
 
 
-async def generate_quiz_background(
-    conversation_id: int, user_id: int, db_session_factory
-):
-    """Background task to generate quiz."""
-    async with db_session_factory() as db:
-        try:
-            await generate_quiz(conversation_id, user_id, db)
-            logger.info("Quiz generation completed", conversation_id=conversation_id)
-        except Exception as e:
-            logger.error("Quiz generation failed", error=str(e), conversation_id=conversation_id)
-
-
-@router.post("/generate/conversation/{conversation_id}", status_code=202)
+@router.post("/generate/conversation/{conversation_id}")
 async def generate_quiz_endpoint(
     conversation_id: int,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate quiz from conversation materials (async)."""
-    from app.database import async_session
-
-    background_tasks.add_task(generate_quiz_background, conversation_id, current_user.id, async_session)
-    return {"message": "Quiz generation started", "conversation_id": conversation_id}
+    """Generate quiz from conversation materials."""
+    await generate_quiz(conversation_id, current_user.id, db)
+    return {"message": "Quiz generation complete", "conversation_id": conversation_id}
 
 
 @router.get("/conversation/{conversation_id}")

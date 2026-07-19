@@ -38,7 +38,11 @@ class OpenRouterProvider:
                 "Content-Type": "application/json",
             },
         )
-        response.raise_for_status()
+
+        if response.status_code >= 400:
+            body = response.text
+            logger.error("OpenRouter error", status=response.status_code, body=body, model=model)
+            response.raise_for_status()
 
         data = response.json()
         return data["choices"][0]["message"]["content"]
@@ -65,6 +69,16 @@ async def generate_with_student_config(
         model = config.model_name
         if config.max_tokens:
             kwargs["max_tokens"] = config.max_tokens
+        if config.system_prompt:
+            messages = [{"role": "system", "content": config.system_prompt}] + messages
+        if config.temperature is not None:
+            kwargs["temperature"] = config.temperature
+        if config.top_p is not None:
+            kwargs["top_p"] = config.top_p
+        if config.frequency_penalty is not None:
+            kwargs["frequency_penalty"] = config.frequency_penalty
+        if config.presence_penalty is not None:
+            kwargs["presence_penalty"] = config.presence_penalty
     else:
         user_result = await db.execute(
             select(User).where(User.id == student_id)

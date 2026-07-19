@@ -1,5 +1,5 @@
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,30 +14,15 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/notes", tags=["notes"])
 
 
-async def generate_notes_background(
-    conversation_id: int, user_id: int, db_session_factory
-):
-    """Background task to generate notes."""
-    async with db_session_factory() as db:
-        try:
-            await generate_notes(conversation_id, user_id, db)
-            logger.info("Notes generation completed", conversation_id=conversation_id)
-        except Exception as e:
-            logger.error("Notes generation failed", error=str(e), conversation_id=conversation_id)
-
-
-@router.post("/generate/conversation/{conversation_id}", status_code=202)
+@router.post("/generate/conversation/{conversation_id}")
 async def generate_notes_endpoint(
     conversation_id: int,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate study notes from conversation materials (async)."""
-    from app.database import async_session
-
-    background_tasks.add_task(generate_notes_background, conversation_id, current_user.id, async_session)
-    return {"message": "Notes generation started", "conversation_id": conversation_id}
+    """Generate study notes from conversation materials."""
+    await generate_notes(conversation_id, current_user.id, db)
+    return {"message": "Notes generation complete", "conversation_id": conversation_id}
 
 
 @router.get("/conversation/{conversation_id}")

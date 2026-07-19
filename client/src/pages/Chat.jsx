@@ -154,17 +154,35 @@ export default function Chat() {
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
-    if (!file || !currentConversation) return;
+    if (!file) return;
+
+    let convId = currentConversation?.id;
+    let isNewConv = false;
+    if (!convId) {
+      const { data: newConv } = await api.post('/chat/conversations');
+      skipNextFetch.current = true;
+      setCurrentConversation({ id: newConv.id, created_at: newConv.created_at, message_count: 0 });
+      setConversations((prev) => [{ id: newConv.id, created_at: newConv.created_at, message_count: 0 }, ...prev]);
+      setMaterials([]);
+      convId = newConv.id;
+      isNewConv = true;
+    }
 
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-      await api.post(`/materials/conversation/${currentConversation.id}`, formData, {
+      await api.post(`/materials/conversation/${convId}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      fetchMaterials(currentConversation.id);
+      fetchMaterials(convId);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      if (isNewConv) {
+        api.post(`/chat/conversations/${convId}/generate-title`).then(({ data: titleData }) => {
+          setConversations((prev) => prev.map((c) => c.id === convId ? { ...c, title: titleData.title } : c));
+          setCurrentConversation((prev) => prev?.id === convId ? { ...prev, title: titleData.title } : prev);
+        }).catch(() => {});
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to upload material');
     }
@@ -192,7 +210,7 @@ export default function Chat() {
     try {
       await api.post(`/${action}/generate/conversation/${currentConversation.id}`);
       setGenLog(prev => prev.map(e => e.id === id ? {...e, text: `${actionName} generation complete`, status: 'done'} : e));
-      setSuccess(`${actionName} generation started!`);
+      setSuccess(`${actionName} generation complete`);
       setTimeout(() => setSuccess(''), 4000);
     } catch (err) {
       const msg = err.response?.data?.detail || `Failed to generate ${action}`;

@@ -13,6 +13,11 @@ export default function LLMConfigs() {
     is_active: true,
     max_tokens: 4000,
     max_materials: 5,
+    system_prompt: '',
+    temperature: '',
+    top_p: '',
+    frequency_penalty: '',
+    presence_penalty: '',
   });
   const [error, setError] = useState('');
 
@@ -44,6 +49,10 @@ export default function LLMConfigs() {
       const payload = {
         ...formData,
         max_tokens: formData.max_tokens || null,
+        temperature: formData.temperature ? Number(formData.temperature) : null,
+        top_p: formData.top_p ? Number(formData.top_p) : null,
+        frequency_penalty: formData.frequency_penalty ? Number(formData.frequency_penalty) : null,
+        presence_penalty: formData.presence_penalty ? Number(formData.presence_penalty) : null,
         restrictions,
       };
       await api[method](url, payload);
@@ -55,7 +64,13 @@ export default function LLMConfigs() {
   };
 
   const handleEdit = (config) => {
-    setFormData(config);
+    setFormData({
+      ...config,
+      temperature: config.temperature ?? '',
+      top_p: config.top_p ?? '',
+      frequency_penalty: config.frequency_penalty ?? '',
+      presence_penalty: config.presence_penalty ?? '',
+    });
     setEditingId(config.id);
     setShowForm(true);
   };
@@ -74,6 +89,7 @@ export default function LLMConfigs() {
     setFormData({
       name: '', provider: 'openrouter', model_name: '',
       is_active: true, max_tokens: 4000, max_materials: 5, restrictions: '',
+      system_prompt: '', temperature: '', top_p: '', frequency_penalty: '', presence_penalty: '',
     });
     setEditingId(null);
     setShowForm(false);
@@ -122,6 +138,30 @@ export default function LLMConfigs() {
             </div>
           </div>
           <div className="mb-5">
+            <label className={labelClass}>System Prompt</label>
+            <textarea value={formData.system_prompt} onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })} className={`${inputClass} font-mono text-sm min-h-[100px]`} placeholder="Optional: override system prompt for all LLM calls using this config" />
+          </div>
+          <div className="grid grid-cols-2 gap-4 mb-5">
+            <div>
+              <label className={labelClass}>Temperature (0–2)</label>
+              <input type="number" step="0.1" value={formData.temperature} onChange={(e) => setFormData({ ...formData, temperature: e.target.value })} className={inputClass} min={0} max={2} placeholder="0.7" />
+            </div>
+            <div>
+              <label className={labelClass}>Top P (0–1)</label>
+              <input type="number" step="0.1" value={formData.top_p} onChange={(e) => setFormData({ ...formData, top_p: e.target.value })} className={inputClass} min={0} max={1} placeholder="1.0" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4 mb-5">
+            <div>
+              <label className={labelClass}>Frequency Penalty (-2–2)</label>
+              <input type="number" step="0.1" value={formData.frequency_penalty} onChange={(e) => setFormData({ ...formData, frequency_penalty: e.target.value })} className={inputClass} min={-2} max={2} placeholder="0.0" />
+            </div>
+            <div>
+              <label className={labelClass}>Presence Penalty (-2–2)</label>
+              <input type="number" step="0.1" value={formData.presence_penalty} onChange={(e) => setFormData({ ...formData, presence_penalty: e.target.value })} className={inputClass} min={-2} max={2} placeholder="0.0" />
+            </div>
+          </div>
+          <div className="mb-5">
             <label className={labelClass}>Restrictions (JSON)</label>
             <textarea value={typeof formData.restrictions === 'object' ? JSON.stringify(formData.restrictions, null, 2) : (formData.restrictions || '')} onChange={(e) => { try { setFormData({ ...formData, restrictions: JSON.parse(e.target.value) }); } catch { setFormData({ ...formData, restrictions: e.target.value }); } }} className={`${inputClass} font-mono text-sm min-h-[100px]`} placeholder='{"allow_topics": ["math", "science"]}' />
           </div>
@@ -141,6 +181,7 @@ export default function LLMConfigs() {
               <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Model</th>
               <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Max Tokens</th>
               <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Max Materials</th>
+              <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Temp</th>
               <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Restrictions</th>
               <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Status</th>
               <th className="px-4 py-4 text-left font-mono text-xs font-medium uppercase text-on-surface-variant border-b border-border-subtle">Actions</th>
@@ -153,6 +194,7 @@ export default function LLMConfigs() {
                 <td className="px-4 py-4 border-b border-border-subtle">{config.model_name}</td>
                 <td className="px-4 py-4 border-b border-border-subtle font-mono text-sm">{config.max_tokens ?? '—'}</td>
                 <td className="px-4 py-4 border-b border-border-subtle font-mono text-sm">{config.max_materials}</td>
+                <td className="px-4 py-4 border-b border-border-subtle font-mono text-sm">{config.temperature ?? '—'}</td>
                 <td className="px-4 py-4 border-b border-border-subtle font-mono text-xs max-w-[200px] truncate" title={typeof config.restrictions === 'object' ? JSON.stringify(config.restrictions) : (config.restrictions || '')}>{config.restrictions ? (typeof config.restrictions === 'object' ? JSON.stringify(config.restrictions) : config.restrictions) : '—'}</td>
                 <td className="px-4 py-4 border-b border-border-subtle">{config.is_active ? 'Active' : 'Inactive'}</td>
                 <td className="px-4 py-4 border-b border-border-subtle">

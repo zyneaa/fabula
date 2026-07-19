@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Integer, JSON, func
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Integer, JSON, Text, Float, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.user import Base
@@ -18,6 +18,11 @@ class LLMConfig(Base):
     max_tokens: Mapped[int | None] = mapped_column(Integer)
     max_materials: Mapped[int] = mapped_column(Integer, default=5)
     restrictions: Mapped[dict | None] = mapped_column(JSON)
+    system_prompt: Mapped[str | None] = mapped_column(Text)
+    temperature: Mapped[float | None] = mapped_column(Float)
+    top_p: Mapped[float | None] = mapped_column(Float)
+    frequency_penalty: Mapped[float | None] = mapped_column(Float)
+    presence_penalty: Mapped[float | None] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
