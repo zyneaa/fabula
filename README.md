@@ -1,23 +1,24 @@
 # Fabula
 
-An AI-powered educational platform that helps teachers create study materials, quizzes, and exam papers, while providing students with intelligent assistance through a university knowledge base and chat system.
+An AI-powered educational platform that helps teachers create study materials, quizzes, and exam papers, and gives students an intelligent assistant backed by a university knowledge base and chat system.
 
 ## Features
 
 ### For Students
-- **Study Materials**: Upload and access study materials (PDF, DOCX, PPTX, TXT)
-- **AI-Generated Notes**: Automatically generate comprehensive study notes from materials
-- **AI-Generated Quizzes**: Create practice quizzes with MCQs and short answers
-- **University Info**: Browse curated university information (timetables, events, courses)
-- **AI Chat Assistant**: Ask questions about university information and get AI-powered answers
+- **Study Materials** — Upload and access study materials (PDF, DOCX, PPTX, TXT). Files are parsed and split into searchable chunks automatically.
+- **AI-Generated Notes** — Generate comprehensive study notes from any uploaded material.
+- **AI-Generated Quizzes** — Create practice quizzes with multiple-choice and short-answer questions.
+- **University Info** — Browse curated university information (timetables, events, courses, and more) maintained by teachers.
+- **AI Chat Assistant** — Ask questions about university info and materials with streaming, character-by-character responses and persistent conversation history.
 
-### For Teachers
-- **Material Management**: Upload and organize study materials
-- **AI Content Generation**: Generate notes, quizzes, and exam papers from materials
-- **Exam Paper Generation**: Analyze previous exams and generate multiple new papers
-- **LLM Configuration**: Create and assign different AI models to students
-- **University Knowledge Base**: Curate university information for students
-- **User Management**: Create and manage student accounts
+### For Teachers & Admins
+- **Material Management** — Upload and organize study materials with automatic text extraction and chunking.
+- **AI Content Generation** — Generate notes, quizzes, and exam papers from materials.
+- **Exam Paper Generation** — Analyze a source exam and generate multiple new variant papers from course content.
+- **LLM Configuration** — Create and manage multiple LLM configs (model, temperature, token limits, system prompts) and assign them to individual students.
+- **University Knowledge Base** — Curate categorized university information for students.
+- **User Management** — Create and manage student, teacher, and admin accounts.
+- **Departments & System Settings** — Manage departments and global LLM defaults.
 
 ## Tech Stack
 
@@ -26,32 +27,35 @@ An AI-powered educational platform that helps teachers create study materials, q
 - **Database**: PostgreSQL 16
 - **ORM**: SQLAlchemy (async)
 - **Migrations**: Alembic
-- **Authentication**: JWT tokens with Argon2 password hashing
+- **Authentication**: JWT with Argon2 password hashing
 - **LLM Integration**: OpenRouter API
 - **Rate Limiting**: SlowAPI
+- **Logging**: structlog
 
 ### Frontend
 - **Framework**: React 19
 - **Build Tool**: Vite
 - **Routing**: React Router
 - **HTTP Client**: Axios
-- **Styling**: Inline styles (no external CSS framework)
+- **Styling**: Tailwind CSS + Material Design 3 design tokens
+- **Rendering**: react-markdown with GFM support
+- **Icons**: lucide-react
 
 ### Infrastructure
 - **Containerization**: Docker & Docker Compose
-- **Reverse Proxy**: Nginx (for frontend)
+- **Reverse Proxy**: Nginx (frontend → backend API proxy)
 
 ## Quick Start with Docker
 
 ### Prerequisites
 - Docker Desktop installed and running
-- OpenRouter API key (for LLM features)
+- An [OpenRouter](https://openrouter.ai) API key (required for all AI features)
 
 ### Setup
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/zyneaa/fabula.git
    cd fabula
    ```
 
@@ -77,7 +81,8 @@ An AI-powered educational platform that helps teachers create study materials, q
 5. **Access the application**
    - Frontend: http://localhost:3000
    - Backend API: http://localhost:8000
-   - API Documentation: http://localhost:8000/docs
+   - Interactive API docs (Swagger UI): http://localhost:8000/docs
+   - ReDoc: http://localhost:8000/redoc
 
 For detailed Docker instructions, see [DOCKER_SETUP.md](DOCKER_SETUP.md).
 
@@ -96,7 +101,7 @@ For detailed Docker instructions, see [DOCKER_SETUP.md](DOCKER_SETUP.md).
    ```bash
    cp .env.example .env
    ```
-   Edit `.env` with your configuration.
+   Edit `.env` with your configuration, including `OPENROUTER_API_KEY`.
 
 3. **Start the database**
    ```bash
@@ -108,7 +113,12 @@ For detailed Docker instructions, see [DOCKER_SETUP.md](DOCKER_SETUP.md).
    alembic upgrade head
    ```
 
-5. **Start the backend**
+5. **Create an admin user**
+   ```bash
+   make seed-admin
+   ```
+
+6. **Start the backend**
    ```bash
    uvicorn app.main:app --reload
    ```
@@ -126,40 +136,36 @@ For detailed Docker instructions, see [DOCKER_SETUP.md](DOCKER_SETUP.md).
    npm run dev
    ```
 
-3. **Access the frontend**
-   - URL: http://localhost:5173
+3. **Access the frontend** at http://localhost:5173
 
-## Project Structure
+> Note: when running the dev server, set `VITE_API_URL` to your backend URL (defaults to `/api` for the Docker setup).
 
-```
-fabula/
-├── app/                    # Backend application
-│   ├── api/               # API endpoints
-│   ├── core/              # Core utilities (security, exceptions, rate limiting)
-│   ├── models/            # SQLAlchemy models
-│   ├── services/          # Business logic services
-│   └── main.py            # FastAPI application entry point
-├── client/                # Frontend React application
-│   ├── src/
-│   │   ├── components/    # Reusable UI components
-│   │   ├── context/       # React context providers
-│   │   ├── pages/         # Page components
-│   │   └── services/      # API service layer
-│   └── Dockerfile
-├── alembic/               # Database migrations
-├── scripts/               # Utility scripts
-├── tests/                 # Test suite
-├── plans/                 # Development plans and documentation
-├── docker-compose.yml     # Docker Compose configuration
-├── Dockerfile             # Backend Dockerfile
-└── requirements.txt       # Python dependencies
+## Common Commands
+
+The project ships a `Makefile` with common workflows:
+
+```bash
+make help              # Show all available commands
+make run               # Start the backend dev server
+make test              # Run backend tests
+make lint              # Lint backend code (ruff)
+make format            # Format backend code (ruff)
+make db-upgrade        # Apply database migrations
+make db-migrate msg="description"  # Autogenerate a new migration
+make seed-admin        # Create the first admin user
 ```
 
-## API Documentation
+### API testing with Hurl
 
-Once the backend is running, visit:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+`hurl/` contains a CLI-first HTTP test suite. Install Hurl, log in, then hit any endpoint:
+
+```bash
+make hurl-login EMAIL=admin@test.com PASSWORD=Admin123
+make hurl-upload file_path=./test.pdf
+make hurl-generate-notes material_id=1
+```
+
+See [hurl/README.md](hurl/README.md) for full usage.
 
 ## Testing
 
@@ -172,50 +178,83 @@ make test
 pytest
 ```
 
-### Frontend Tests
+The suite covers services (chat, chunker, notes, quiz, exam papers, uni info, LLM) and API endpoints (materials, users, LLM configs).
+
+### Frontend Linting
 ```bash
 cd client
-npm test
+npm run lint
 ```
 
-## CLI Tools
+## Project Structure
 
-The project includes a Makefile with common commands:
-
-```bash
-make help              # Show all available commands
-make run               # Start backend server
-make test              # Run tests
-make db-upgrade        # Apply database migrations
-make seed-admin        # Create admin user
-make hurl-login        # Login via Hurl
-make hurl-list         # List materials
-# ... and many more
 ```
+fabula/
+├── app/                    # Backend application
+│   ├── api/               # API routers (auth, materials, notes, quizzes, chat, ...)
+│   ├── core/              # Security, exceptions, rate limiting
+│   ├── models/            # SQLAlchemy models
+│   ├── schemas/           # Pydantic schemas
+│   ├── services/          # Business logic (LLM, chunker, parsers, generation)
+│   ├── tasks/             # Background tasks
+│   ├── config.py          # Environment-based settings
+│   ├── database.py        # Async SQLAlchemy engine/session
+│   └── main.py            # FastAPI application entry point
+├── client/                # Frontend React application
+│   ├── src/
+│   │   ├── components/    # Reusable UI components
+│   │   ├── context/       # React context providers
+│   │   ├── pages/         # Page components
+│   │   ├── services/      # API service layer
+│   │   └── utils/         # Utility helpers
+│   └── Dockerfile, nginx.conf
+├── alembic/               # Database migrations
+├── scripts/               # Utility scripts (seed_admin.py, ...)
+├── tests/                 # Backend test suite
+├── hurl/                  # Hurl API tests
+├── diagram/               # Mermaid diagrams (ER, flowchart, sequence, use case)
+├── plans/                 # Development plans and episode summaries
+├── docs/                  # Additional documentation
+├── docker-compose.yml     # Docker Compose configuration
+├── Dockerfile             # Backend Dockerfile
+└── requirements.txt       # Python dependencies
+```
+
+## API Overview
+
+Once running, explore the full API at http://localhost:8000/docs. Main resource groups:
+
+| Router | Base path | Description |
+| --- | --- | --- |
+| Auth | `/auth` | Login, profile, JWT auth |
+| Users | `/users` | User management (role-based) |
+| Materials | `/materials` | Upload/list/get/delete study materials |
+| Notes | `/notes` | AI note generation |
+| Quizzes | `/quizzes` | AI quiz generation |
+| Exam Papers | `/exam-papers` | AI exam paper generation |
+| LLM Configs | `/llm-configs` | Manage configs and student assignments |
+| Uni Info | `/uni-info` | University knowledge base |
+| Chat | `/chat` | Conversations and AI chat |
+| Departments | `/departments` | Department management |
+| System Configs | `/system-configs` | Global LLM defaults |
 
 ## Documentation
 
-- [DOCKER_SETUP.md](DOCKER_SETUP.md) - Detailed Docker setup guide
-- [EPISODE_4_SUMMARY.md](EPISODE_4_SUMMARY.md) - AI features implementation
-- [EPISODE_5_SUMMARY.md](EPISODE_5_SUMMARY.md) - University info and chat system
-- [client/README.md](client/README.md) - Frontend documentation
-- [hurl/README.md](hurl/README.md) - API testing with Hurl
-
-## Development Roadmap
-
-See the `plans/` directory for development episodes and future plans:
-- Episode 1: Authentication & User Management
-- Episode 2: Material Management
-- Episode 3: LLM Integration
-- Episode 4: AI Features (Notes, Quizzes, Exam Papers)
-- Episode 5: University Info System & Chat
+- [DOCKER_SETUP.md](DOCKER_SETUP.md) — Detailed Docker setup guide
+- [DOCKER_SUMMARY.md](DOCKER_SUMMARY.md) — Docker architecture summary
+- [client/README.md](client/README.md) — Frontend documentation
+- [hurl/README.md](hurl/README.md) — API testing with Hurl
+- [docs/llm-config-assignment.md](docs/llm-config-assignment.md) — LLM config assignment design
+- [plans/ABSTRACT.md](plans/ABSTRACT.md) — Project abstract
+- [diagram/er.md](diagram/er.md) — Entity-relationship diagram
+- Episode summaries — see `plans/SUMMARY/`
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run tests: `make test`
+4. Run lint and tests: `make lint && make test`
 5. Submit a pull request
 
 ## License
@@ -225,6 +264,7 @@ This project is licensed under the MIT License.
 ## Support
 
 For issues and questions:
+- Open a GitHub issue at https://github.com/zyneea/fabula/issues
 - Check the [Docker Setup Guide](DOCKER_SETUP.md) for deployment issues
-- Review API documentation at http://localhost:8000/docs
+- Review the interactive API docs at http://localhost:8000/docs
 - Check logs: `docker-compose logs`

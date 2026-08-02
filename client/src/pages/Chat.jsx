@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import api from '../services/api';
@@ -68,9 +68,11 @@ export default function Chat() {
     }))
   );
   const messagesEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const skipNextFetch = useRef(false);
+  const prevMessageCountRef = useRef(0);
 
   useEffect(() => {
     fetchConversations();
@@ -111,7 +113,10 @@ export default function Chat() {
   }, [currentConversation]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length > prevMessageCountRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      prevMessageCountRef.current = messages.length;
+    }
   }, [messages]);
 
   const fetchConversations = async () => {
@@ -514,7 +519,7 @@ export default function Chat() {
           />
         )}
 
-        <div className="flex-1 overflow-x-hidden overflow-y-auto custom-scrollbar relative z-10">
+        <div ref={chatContainerRef} className="flex-1 overflow-x-hidden overflow-y-auto custom-scrollbar relative z-10">
           {!hasConfig && user?.role === 'student' ? (
             <div className="flex flex-col items-center justify-center h-full text-center px-6">
               <div className="w-14 h-14 rounded-full bg-surface-container-highest text-on-surface-variant flex items-center justify-center mb-4">
