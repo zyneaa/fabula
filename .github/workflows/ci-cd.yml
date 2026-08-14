@@ -274,7 +274,7 @@ jobs:
           docker compose -p fabula pull postgres backend frontend
 
           echo "Running database migrations..."
-          docker compose -p fabula --env-file .env.deploy run --rm -e DATABASE_URL="${DATABASE_URL}" backend alembic upgrade head
+          docker compose -p fabula --env-file .env.deploy run --rm -e DATABASE_URL="${DATABASE_URL}" --network fabula-network backend alembic upgrade head
 
           echo "Starting updated containers..."
           docker compose -p fabula up -d backend frontend
