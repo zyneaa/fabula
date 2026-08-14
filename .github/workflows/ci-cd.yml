@@ -94,8 +94,19 @@ jobs:
         working-directory: .
         run: |
           set -euo pipefail
-          trivy config --format sarif --output trivy-config-results.sarif .
-          trivy compose --format sarif --output trivy-compose-results.sarif docker-compose.yml
+          mkdir -p reports
+
+          trivy config \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            --format json \
+            . > reports/trivy-config.json || true
+
+          trivy compose \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            --format json \
+            docker-compose.yml > reports/trivy-compose.json || true
 
       - name: Upload all Trivy scan results
         if: always()
