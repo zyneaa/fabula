@@ -21,6 +21,20 @@ def mock_db():
 
 
 @pytest.fixture
+def mock_background_tasks():
+    """Mock BackgroundTasks.add_task to prevent actual background processing."""
+    from unittest.mock import patch
+    
+    def _patch_add_task():
+        def mock_add_task(self, *args, **kwargs):
+            pass  # Don't actually run background task
+        
+        return patch('fastapi.BackgroundTasks.add_task', mock_add_task)
+    
+    return _patch_add_task
+
+
+@pytest.fixture
 def mock_user():
     return User(id=1, email="test@test.com", name="Test", role=UserRole.student)
 
@@ -35,7 +49,7 @@ def client(mock_db, mock_user):
     app.dependency_overrides.clear()
 
 
-def test_upload_material(client, mock_db, tmp_path):
+def test_upload_material(client, mock_db, mock_background_tasks, tmp_path):
     # Mock database execute results in order of calls:
     # 1. LLM config query
     # 2. Material count query
@@ -47,17 +61,20 @@ def test_upload_material(client, mock_db, tmp_path):
     
     mock_db.execute = AsyncMock(side_effect=[config_result, count_result])
 
+    # Mock refresh to set uploaded_at on the material object
+    def mock_refresh(material):
+        material.id = 1
+        material.uploaded_at = datetime.now(timezone.utc)
+    mock_db.refresh = AsyncMock(side_effect=mock_refresh)
+
     file_content = b"test content"
     
-    # Mock BackgroundTasks to prevent actual background processing
-    with patch("app.api.materials.BackgroundTasks") as MockBackgroundTasks:
-        mock_background = MagicMock()
-        MockBackgroundTasks.return_value = mock_background
-        
+    # Patch add_task to prevent background task from running
+    with mock_background_tasks():
         response = client.post(
-            "/materials/conversation/1",
-            files={"file": ("test.txt", file_content, "text/plain")},
-        )
+        "/materials/conversation/1",
+        files={"file": ("test.txt", file_content, "text/plain")},
+    )
     
     assert response.status_code == 201
     data = response.json()
