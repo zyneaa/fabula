@@ -1,0 +1,107 @@
+# Common directories for brute force scanning
+# This is a fallback wordlist if no custom wordlist is provided
+
+# Admin panels
+/admin
+/admin.php
+/administrator
+/admin/login.php
+/admin/dashboard
+/wp-admin
+/wp-login.php
+/wp-admin/admin.php
+/wp-admin/dashboard
+/manager
+/manager/html
+/console
+
+# Backups
+/backup
+/backup.sql
+/backups
+/database
+/db
+/db.sql
+/sql
+/sql.backup
+
+# Sensitive files
+/.env
+/.env.local
+/.env.production
+/.env.docker
+/.env.example
+/config
+/config.php
+/config.json
+/secrets
+/secrets.json
+/credentials
+/credentials.txt
+/.git/config
+/.git/HEAD
+/docker-compose.yml
+
+# Common web files
+/phpmyadmin
+/pma
+/mysql
+/webmail
+/mail
+/ftp
+/logs
+/error_log
+/access_log
+
+# WordPress
+/wp-config.php
+/wp-content
+/wp-includes
+
+# Common paths
+/.htaccess
+/.htpasswd
+/server-status
+/server-info
+/phpinfo.php
+/info.php
+/test.php
+/debug.php
+/debug
+/Dev
+
+# Version control
+/.svn
+/.hg
+/.git
+/.gitignore
+/README.md
+/CHANGELOG.md
+
+# Docker/CI
+/docker-compose.yml
+/docker-compose.yaml
+/compose.yml
+/compose.yaml
+/.travis.yml
+/.gitlab-ci.yml
+/Jenkinsfile
+
+# API endpoints
+/api
+/api/v1
+/api/v2
+/api/v3
+/graphql
+/graphql/query
+/api-docs
+/swagger
+/docs
+
+# Cloud metadata (security risk if exposed)
+/.aws
+/.aws/credentials
+/.azure
+/google-cloud
+/k8s
+/kubernetes

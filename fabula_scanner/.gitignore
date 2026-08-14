@@ -1,0 +1,30 @@
+# Environment variables with secrets
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Credentials
+credentials.json
+secrets.json
+*.credentials
+
+# Telegram tokens
+TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID
+TELEGRAM_THREAD_ID
+
+# IDE and build artifacts
+__pycache__
+*.pyc
+.pytest_cache
+dist/
+build/
+*.egg-info/
+
+# Reports (you can also commit these)
+reports/
+
+# Logs
+*.log
+logs/

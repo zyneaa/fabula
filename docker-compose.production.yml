@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fabula}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-fabula}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fabula} -d ${POSTGRES_DB:-fabula}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fabula-network
+
+  backend:
+    image: ${REGISTRY:-fabula}/fabula:${TAG:-latest}
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-fabula}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-fabula}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ALGORITHM=HS256
+      - JWT_EXPIRE_MINUTES=60
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - DEFAULT_LLM_MODEL=${DEFAULT_LLM_MODEL:-google/gemma-4-26b-a4b-it}
+      - UPLOAD_DIR=./uploads
+      - MAX_UPLOAD_SIZE_MB=50
+      - CORS_ORIGINS=["${CORS_ORIGINS:-http://localhost:3000}"]
+      - PYTHONPATH=/app
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - fabula-network
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+
+  frontend:
+    image: ${REGISTRY:-fabula}/fabula:frontend-${TAG:-latest}
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - fabula-network
+
+networks:
+  fabula-network:
+    driver: bridge
+
+volumes:
+  pgdata:

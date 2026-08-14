@@ -1,0 +1,85 @@
+name: Fabula Security Scanner
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday at midnight
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  security-scan:
+    name: Weekly Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install scanner dependencies
+        run: |
+          cd fabula_scanner
+          pip install -r requirements.txt
+          pip install pyyaml rich colorama
+
+      - name: Run Fabula Security Scanner
+        id: security_scan
+        env:
+          TARGET_URL: ${{ secrets.TARGET_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          cd fabula_scanner
+          if [ -z "$TARGET_URL" ]; then
+            echo "❌ TARGET_URL environment variable not set"
+            exit 1
+          fi
+          echo "Running security scan against $TARGET_URL"
+          python fabula.py --target "$TARGET_URL" --output reports/weekly-scan --format both --no-telegram || true
+
+      - name: Check scan results
+        id: check_results
+        run: |
+          cd fabula_scanner/reports
+          if [ -f weekly-scan.json ]; then
+            CRITICAL=$(cat weekly-scan.json | python -c "import sys,json; d=json.load(sys.stdin); print(d.get('summary',{}).get('critical',0))" 2>/dev/null || echo "0")
+            HIGH=$(cat weekly-scan.json | python -c "import sys,json; d=json.load(sys.stdin); print(d.get('summary',{}).get('high',0))" 2>/dev/null || echo "0")
+            
+            echo "Critical: $CRITICAL, High: $HIGH"
+            
+            if [ "$CRITICAL" -gt 0 ]; then
+              echo "SECURITY_STATUS=critical" >> $GITHUB_ENV
+              exit 1
+            elif [ "$HIGH" -gt 0 ]; then
+              echo "SECURITY_STATUS=high" >> $GITHUB_ENV
+            else
+              echo "SECURITY_STATUS=clean" >> $GITHUB_ENV
+            fi
+          else
+            echo "⚠️ Scan report not found"
+            echo "SECURITY_STATUS=unknown" >> $GITHUB_ENV
+          fi
+
+      - name: Upload scan report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-security-report
+          path: fabula_scanner/reports/
+          retention-days: 30
+
+      - name: Send summary notification
+        if: github.event_name == 'schedule'
+        run: |
+          if [ "${{ env.SECURITY_STATUS }}" == "critical" ]; then
+            echo "🚨 CRITICAL: Weekly security scan found CRITICAL vulnerabilities!"
+          elif [ "${{ env.SECURITY_STATUS }}" == "high" ]; then
+            echo "⚠️ WARNING: Weekly security scan found HIGH severity vulnerabilities!"
+          elif [ "${{ env.SECURITY_STATUS }}" == "clean" ]; then
+            echo "✅ Clean: Weekly security scan found no HIGH/CRITICAL vulnerabilities!"
+          else
+            echo "ℹ️ Unknown: Security scan could not complete"
+          fi

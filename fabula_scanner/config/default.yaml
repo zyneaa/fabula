@@ -1,0 +1,44 @@
+# ============================================================
+# FABULA SECURITY SCANNER - CONFIGURATION
+# ============================================================
+# IMPORTANT: Do not commit credentials to git!
+# Use environment variables instead:
+#   - TELEGRAM_BOT_TOKEN
+#   - TELEGRAM_CHAT_ID
+
+timeout: 5
+# Wordlist for directory brute force
+# Default fallback paths are embedded in the code if file not found
+dir_wordlist: payloads/directories.txt
+nmap_args: -sS -sV -T4 -p 21,22,25,80,443,3306,5432,6379
+nmap_timeout: 20
+os_detection: false
+nse_scripts: false
+
+# ------------------------------------------------------------
+# TELEGRAM ALERTS
+# ------------------------------------------------------------
+telegram:
+  # Bot credentials (use environment variables in production!)
+  # Set these as environment variables:
+  #   TELEGRAM_BOT_TOKEN=your-token-here
+  #   TELEGRAM_CHAT_ID=your-chat-id-here
+  bot_token: ${TELEGRAM_BOT_TOKEN}
+  chat_id: "1812677220"
+  
+  # Alert settings
+  enabled: false
+  alert_threshold: HIGH
+  include_critical: true
+  include_high: true
+  include_medium: false
+  include_low: false
+  include_info: false
+  
+  # Message formatting
+  show_description: true
+  show_remediation: true
+  show_module: true
+  max_findings_per_message: 10
+  truncate_description: 120
+  send_summary_always: true

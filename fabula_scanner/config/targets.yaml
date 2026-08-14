@@ -1,0 +1,18 @@
+# targets.yaml - List of targets to scan
+
+targets:
+  - url: "https://example.com"
+    name: "Example Main Site"
+    config: "config/default.yaml"
+  
+  - url: "https://api.example.com"
+    name: "Example API"
+    config: "config/prod.yaml"
+  
+  - url: "https://staging.example.com"
+    name: "Staging Environment"
+    config: "config/staging.yaml"
+  
+  - url: "http://192.168.1.100"
+    name: "Internal Development Server"
+    config: "config/internal.yaml"

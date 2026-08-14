@@ -42,3 +42,17 @@ docker-compose.override.yml
 *.pem
 *.key
 *.cert
+
+# Credentials and secrets
+.env
+.env.*
+*.env
+credentials.json
+secrets.json
+config/credentials.yaml
+config/secrets.yaml
+fabula_scanner/config/*.env
+
+# Telegram tokens
+TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID
