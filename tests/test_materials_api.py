@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import UploadFile
@@ -13,10 +13,10 @@ from app.models.user import User, UserRole
 
 @pytest.fixture
 def mock_db():
-    db = MagicMock()
-    db.add = MagicMock()
-    db.commit = MagicMock()
-    db.refresh = MagicMock()
+    db = AsyncMock()
+    db.add = MagicMock()  # db.add is synchronous
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
     return db
 
 
@@ -38,18 +38,14 @@ def client(mock_db, mock_user):
 def test_upload_material(client, mock_db, tmp_path):
     # Mock database execute results in order of calls:
     # 1. LLM config query
-    # 2. Material count query  
-    # 3. Conversation query (if any)
+    # 2. Material count query
     config_result = MagicMock()
     config_result.scalars.return_value.first.return_value = None
     
     count_result = MagicMock()
     count_result.scalar.return_value = 0
     
-    conversation_result = MagicMock()
-    conversation_result.scalar_one_or_none.return_value = None
-    
-    mock_db.execute = MagicMock(side_effect=[config_result, count_result, conversation_result])
+    mock_db.execute = AsyncMock(side_effect=[config_result, count_result])
 
     file_content = b"test content"
     
