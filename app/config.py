@@ -16,7 +16,7 @@ class Settings(BaseSettings):
         "http://localhost:5173",
     ]
 
-    model_config = {"env_file": ".env"}
+    model_config = {"env_file": ".env", "extra": "allow"}
 
 
 settings = Settings()
