@@ -33,7 +33,14 @@ def client(mock_db, mock_user):
 
 
 def test_upload_material(client, mock_db, tmp_path):
-    mock_db.execute = AsyncMock()
+    # Fix the mock to properly handle synchronous scalars().first()
+    config_result = MagicMock()
+    config_result.scalars.return_value.first.return_value = None  # No LLM config exists
+    
+    conversation_result = MagicMock()
+    conversation_result.scalar_one_or_none.return_value = None  # No conversation yet
+    
+    mock_db.execute = AsyncMock(side_effect=[config_result, conversation_result])
     mock_db.commit = AsyncMock()
 
     async def mock_refresh(obj):
