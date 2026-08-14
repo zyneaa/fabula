@@ -282,6 +282,7 @@ jobs:
           sleep 15
 
           echo "Running database migrations..."
+          docker compose -p fabula cp .env.app backend:/app/.env
           docker compose -p fabula exec -T backend python -m alembic upgrade head
 
           echo "Waiting for application health check..."
