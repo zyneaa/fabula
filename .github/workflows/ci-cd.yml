@@ -270,14 +270,17 @@ jobs:
           . ./.env.deploy
           set +a
 
-          echo "Pulling exact Git SHA images..."
-          docker compose -p fabula pull postgres backend frontend
+          echo "Starting base services (postgres) first..."
+          docker compose -p fabula up -d postgres
+
+          echo "Waiting for postgres to be ready..."
+          sleep 10
 
           echo "Running database migrations..."
           docker compose -p fabula --env-file .env.deploy run --rm -e DATABASE_URL="${DATABASE_URL}" --network fabula-network backend alembic upgrade head
 
-          echo "Starting updated containers..."
-          docker compose -p fabula up -d backend frontend
+          echo "Starting all services..."
+          docker compose -p fabula up -d
 
           echo "Waiting for application health check..."
           for attempt in {1..20}; do
