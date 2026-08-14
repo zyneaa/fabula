@@ -208,6 +208,39 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          image-ref: ${{ env.DOCKERHUB_IMAGE_NAME }}:${{ github.sha }}
+          format: sarif
+          output: trivy-results.sarif
+
+      - name: Upload Trivy scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-scan-results
+          path: trivy-results.sarif
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Check Trivy scan results for critical issues
+        run: |
+          set -euo pipefail
+
+          if [ ! -f trivy-results.sarif ]; then
+            echo "Trivy scan did not produce results."
+            exit 1
+          fi
+
+          CRITICAL=$(cat trivy-results.sarif | python -c 'import sys,json; d=json.load(sys.stdin); print(sum(1 for r in d.get("results",[]) if r.get("severity","").upper()=="CRITICAL"))' 2>/dev/null || echo "0")
+
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "CRITICAL: Trivy found $CRITICAL critical vulnerability(s). Blocking image push."
+            exit 1
+          fi
+
+          echo "Trivy scan passed - no critical vulnerabilities."
+
       - name: Build and push backend image to Docker Hub
         uses: docker/build-push-action@v6
         with:
@@ -334,6 +367,112 @@ jobs:
             -o StrictHostKeyChecking=no \
             "$VPS_USER@$VPS_HOST" \
             'bash "$HOME/fabula/deploy.sh"'
+
+      - name: Wait for health check
+        run: |
+          echo "Waiting for application health check..."
+          sleep 10
+
+      - name: Check local health
+        run: |
+          set -euo pipefail
+          for attempt in {1..10}; do
+            if curl --fail --silent http://localhost:8000/health >/dev/null 2>&1; then
+              echo "Local health check passed."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Local health check failed."
+          exit 1
+
+      - name: Check public health
+        env:
+          TARGET_URL: ${{ secrets.TARGET_URL }}
+        run: |
+          set -euo pipefail
+          for attempt in {1..10}; do
+            if curl --fail --silent "$TARGET_URL/health" >/dev/null 2>&1; then
+              echo "Public health check passed."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Public health check failed."
+          exit 1
+
+      - name: Run Fabula live scanner
+        id: live_scan
+        continue-on-error: true
+        working-directory: fabula_scanner
+        env:
+          TARGET_URL: ${{ secrets.TARGET_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          set -o pipefail
+          mkdir -p reports
+
+          python fabula.py \
+            --target "$TARGET_URL" \
+            --output reports/live-scan \
+            --format json \
+            2>&1 | tee live-scan.log
+
+          if grep -Eqi \
+            'No response|Could not fetch target|Could not fetch target URL|No IP resolved|Could not resolve target' \
+            live-scan.log; then
+            echo "The scanner could not complete a valid live scan."
+            exit 1
+          fi
+
+      - name: Respond to live-scan result
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          set -euo pipefail
+
+          send_telegram() {
+            curl --fail --silent --show-error \
+              -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+              --data-urlencode "text=$1" \
+              >/dev/null
+          }
+
+          if [ "${{ steps.live_scan.outcome }}" != "success" ]; then
+            send_telegram "Fabula live security scan FAILED or could not reach the target. The result is not a clean scan. Review GitHub Actions immediately."
+            exit 1
+          fi
+
+          REPORT="fabula_scanner/reports/live-scan.json"
+          if [ ! -f "$REPORT" ]; then
+            send_telegram "Fabula live security scan produced no report. The deployment requires investigation."
+            exit 1
+          fi
+
+          CRITICAL="$(python -c 'import json,sys; print(json.load(sys.stdin).get("summary", {}).get("critical", 0))' < "$REPORT")"
+          SENSITIVE="$(python -c 'import json,sys; print(json.load(sys.stdin).get("summary", {}).get("sensitive", 0))' < "$REPORT")"
+
+          echo "Critical findings: $CRITICAL"
+          echo "Sensitive findings: $SENSITIVE"
+
+          if [ "$CRITICAL" -gt 0 ] || [ "$SENSITIVE" -gt 0 ]; then
+            send_telegram "CRITICAL Fabula vulnerability detected. Enabling maintenance mode on the Vultr deployment. Critical: ${CRITICAL}; Sensitive: ${SENSITIVE}. Review the GitHub Actions artifact and logs."
+
+            ssh -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=no \
+              "$VPS_USER@$VPS_HOST" \
+              'cd "$HOME/fabula" && ./maintenance-on.sh'
+
+            exit 1
+          fi
+
+          send_telegram "Fabula deployment completed and live security scan found no Critical or Sensitive findings."
 
       - name: Notify deployment success
         if: success()
