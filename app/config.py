@@ -1,7 +1,9 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
     DATABASE_URL: str = "postgresql+asyncpg://user:pass@localhost:5432/fabula"
     JWT_SECRET: str = "change-me"
     JWT_ALGORITHM: str = "HS256"
@@ -15,8 +17,6 @@ class Settings(BaseSettings):
         "http://localhost:3001",
         "http://localhost:5173",
     ]
-
-    model_config = {"env_file": ".env", "extra": "allow"}
 
 
 settings = Settings()
