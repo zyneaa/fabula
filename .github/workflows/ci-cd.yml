@@ -61,7 +61,7 @@ jobs:
           echo "Docker image built successfully."
 
   security-scan:
-    name: Security Scan
+    name: Pre-deployment Security Scan
     runs-on: ubuntu-latest
     needs: build-and-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -71,71 +71,65 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
+      - name: Set up Trivy
+        uses: aquasecurity/trivy-action@0.29.0
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: fabula_scanner/requirements.txt
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs-results.sarif
+          severity: "CRITICAL,HIGH"
 
-      - name: Install scanner dependencies
-        working-directory: fabula_scanner
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyyaml rich colorama
+      - name: Run Trivy secret scan
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-secret-results.sarif
+          severity: "CRITICAL,HIGH"
+          secrets: true
 
-      - name: Run Fabula Security Scanner
-        env:
-          TARGET_URL: ${{ secrets.TARGET_URL }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        working-directory: fabula_scanner
-        run: |
-          set -euo pipefail
-          mkdir -p reports
-
-          if [ -z "${TARGET_URL:-}" ]; then
-            echo "TARGET_URL is not configured. A reachable deployed URL is required."
-            exit 1
-          fi
-
-          python fabula.py \
-            --target "$TARGET_URL" \
-            --output reports/ci-scan \
-            --format json
-
-      - name: Check scan results for critical findings
-        working-directory: fabula_scanner/reports
+      - name: Run Trivy Docker/Compose configuration scan
+        working-directory: .
         run: |
           set -euo pipefail
+          trivy config --format sarif --output trivy-config-results.sarif .
+          trivy compose --format sarif --output trivy-compose-results.sarif docker-compose.yml
 
-          if [ ! -f ci-scan.json ]; then
-            echo "ci-scan.json was not generated."
-            exit 1
-          fi
-
-          CRITICAL="$(python -c 'import json, sys; print(json.load(sys.stdin).get("summary", {}).get("critical", 0))' < ci-scan.json)"
-          HIGH="$(python -c 'import json, sys; print(json.load(sys.stdin).get("summary", {}).get("high", 0))' < ci-scan.json)"
-
-          echo "Critical findings: $CRITICAL"
-          echo "High findings: $HIGH"
-
-          if [ "$CRITICAL" -gt 0 ]; then
-            echo "Critical vulnerabilities found; blocking image publication and deployment."
-            exit 1
-          fi
-
-          echo "No critical vulnerabilities found."
-
-      - name: Upload security scan report
+      - name: Upload all Trivy scan results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: security-scan-report
-          path: fabula_scanner/reports/
+          name: trivy-all-scans
+          path: |
+            trivy-fs-results.sarif
+            trivy-secret-results.sarif
+            trivy-config-results.sarif
+            trivy-compose-results.sarif
           retention-days: 30
           if-no-files-found: warn
+
+      - name: Check Trivy findings
+        run: |
+          set -euo pipefail
+
+          TOTAL_CRITICAL=0
+
+          for f in trivy-fs-results.sarif trivy-secret-results.sarif trivy-config-results.sarif trivy-compose-results.sarif; do
+            if [ -f "$f" ]; then
+              CRITICAL=$(python -c "import json,sys; d=json.load(open(sys.argv[1])); print(sum(1 for r in d.get('results',[]) if r.get('severity','').upper() in ('CRITICAL','HIGH')))" "$f" 2>/dev/null || echo "0")
+              echo "$f: $CRITICAL critical/high findings"
+              TOTAL_CRITICAL=$((TOTAL_CRITICAL + CRITICAL))
+            fi
+          done
+
+          if [ "$TOTAL_CRITICAL" -gt 0 ]; then
+            echo "CRITICAL: Found $TOTAL_CRITICAL critical/high issues. Blocking deployment."
+            exit 1
+          fi
+
+          echo "No critical/high issues found."
 
   security-summary:
     name: Security Scan Summary
@@ -150,37 +144,15 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: security-scan-report
-          path: fabula_scanner/reports/
+          name: trivy-all-scans
+          path: trivy-reports/
 
       - name: Generate security summary
         if: always()
         run: |
           set -euo pipefail
-
-          REPORT="fabula_scanner/reports/ci-scan.json"
-          if [ ! -f "$REPORT" ]; then
-            echo "No security scan report was available."
-            exit 0
-          fi
-
-          python - "$REPORT" <<'PY'
-          import json
-          import sys
-
-          with open(sys.argv[1], encoding="utf-8") as report_file:
-              data = json.load(report_file)
-
-          summary = data.get("summary", {})
-          print("=== Security Scan Summary ===")
-          print(f"Target: {data.get('target', 'N/A')}")
-          print(f"Total Findings: {sum(summary.values())}")
-          print(f"  Critical: {summary.get('critical', 0)}")
-          print(f"  High: {summary.get('high', 0)}")
-          print(f"  Medium: {summary.get('medium', 0)}")
-          print(f"  Low: {summary.get('low', 0)}")
-          print(f"  Info: {summary.get('info', 0)}")
-          PY
+          echo "=== Security Scan Summary ==="
+          echo "All scans completed. Check artifacts for details."
 
   build-and-push-images:
     name: Build and Push Docker Images
@@ -207,39 +179,6 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Run Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@0.29.0
-        with:
-          image-ref: ${{ env.DOCKERHUB_IMAGE_NAME }}:${{ github.sha }}
-          format: sarif
-          output: trivy-results.sarif
-
-      - name: Upload Trivy scan results
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-scan-results
-          path: trivy-results.sarif
-          retention-days: 30
-          if-no-files-found: warn
-
-      - name: Check Trivy scan results for critical issues
-        run: |
-          set -euo pipefail
-
-          if [ ! -f trivy-results.sarif ]; then
-            echo "Trivy scan did not produce results."
-            exit 1
-          fi
-
-          CRITICAL=$(cat trivy-results.sarif | python -c 'import sys,json; d=json.load(sys.stdin); print(sum(1 for r in d.get("results",[]) if r.get("severity","").upper()=="CRITICAL"))' 2>/dev/null || echo "0")
-
-          if [ "$CRITICAL" -gt 0 ]; then
-            echo "CRITICAL: Trivy found $CRITICAL critical vulnerability(s). Blocking image push."
-            exit 1
-          fi
-
-          echo "Trivy scan passed - no critical vulnerabilities."
 
       - name: Build and push backend image to Docker Hub
         uses: docker/build-push-action@v6
@@ -272,7 +211,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
   deploy:
-    name: Deploy to VPS
+    name: Deploy to Vultr VPS
     runs-on: ubuntu-latest
     needs: build-and-push-images
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -312,14 +251,14 @@ jobs:
 
           cd "$HOME/fabula"
 
-          echo "Pulling latest Docker images..."
+          echo "Pulling exact Git SHA images..."
           docker compose pull
-
-          echo "Starting updated containers..."
-          docker compose up -d --remove-orphans
 
           echo "Running database migrations..."
           docker compose exec -T backend alembic upgrade head
+
+          echo "Starting updated containers..."
+          docker compose up -d --remove-orphans
 
           echo "Waiting for application health check..."
           for attempt in {1..20}; do
@@ -368,11 +307,6 @@ jobs:
             "$VPS_USER@$VPS_HOST" \
             'bash "$HOME/fabula/deploy.sh"'
 
-      - name: Wait for health check
-        run: |
-          echo "Waiting for application health check..."
-          sleep 10
-
       - name: Check local health
         run: |
           set -euo pipefail
@@ -386,20 +320,58 @@ jobs:
           echo "Local health check failed."
           exit 1
 
-      - name: Check public health
+  public-health-check:
+    name: Check Public Website Health
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Check public health endpoint
         env:
           TARGET_URL: ${{ secrets.TARGET_URL }}
         run: |
           set -euo pipefail
+          echo "Waiting for public endpoint..."
+          sleep 10
           for attempt in {1..10}; do
             if curl --fail --silent "$TARGET_URL/health" >/dev/null 2>&1; then
               echo "Public health check passed."
               exit 0
             fi
-            sleep 5
+            sleep 10
           done
           echo "Public health check failed."
           exit 1
+
+  live-security-scan:
+    name: Run Fabula Live Scanner
+    runs-on: ubuntu-latest
+    needs: public-health-check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: fabula_scanner/requirements.txt
+
+      - name: Install scanner dependencies
+        working-directory: fabula_scanner
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyyaml rich colorama
 
       - name: Run Fabula live scanner
         id: live_scan
@@ -426,8 +398,32 @@ jobs:
             exit 1
           fi
 
-      - name: Respond to live-scan result
+      - name: Upload live scan report
         if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-scan-report
+          path: fabula_scanner/reports/
+          retention-days: 30
+          if-no-files-found: warn
+
+  live-scan-response:
+    name: Respond to Live Scan Result
+    runs-on: ubuntu-latest
+    needs: live-security-scan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Download live scan report
+        id: download-report
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: live-scan-report
+          path: fabula_scanner/reports/
+
+      - name: Respond to live-scan result
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -444,7 +440,7 @@ jobs:
               >/dev/null
           }
 
-          if [ "${{ steps.live_scan.outcome }}" != "success" ]; then
+          if [ "${{ needs.live-security-scan.result }}" != "success" ]; then
             send_telegram "Fabula live security scan FAILED or could not reach the target. The result is not a clean scan. Review GitHub Actions immediately."
             exit 1
           fi
@@ -462,7 +458,7 @@ jobs:
           echo "Sensitive findings: $SENSITIVE"
 
           if [ "$CRITICAL" -gt 0 ] || [ "$SENSITIVE" -gt 0 ]; then
-            send_telegram "CRITICAL Fabula vulnerability detected. Enabling maintenance mode on the Vultr deployment. Critical: ${CRITICAL}; Sensitive: ${SENSITIVE}. Review the GitHub Actions artifact and logs."
+            send_telegram "CRITICAL: Fabula live scan found a sensitive vulnerability. Enabling maintenance mode on the Vultr deployment. Critical: ${CRITICAL}; Sensitive: ${SENSITIVE}. Review GitHub Actions artifact: live-scan-report. Target: ${{ secrets.TARGET_URL }}"
 
             ssh -i ~/.ssh/deploy_key \
               -o StrictHostKeyChecking=no \
@@ -473,13 +469,3 @@ jobs:
           fi
 
           send_telegram "Fabula deployment completed and live security scan found no Critical or Sensitive findings."
-
-      - name: Notify deployment success
-        if: success()
-        run: echo "Deployment to VPS completed successfully."
-
-      - name: Notify deployment failure
-        if: failure()
-        run: |
-          echo "Deployment failed. Review the deploy job logs."
-          exit 1
