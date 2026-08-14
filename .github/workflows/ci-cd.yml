@@ -262,16 +262,22 @@ jobs:
           #!/usr/bin/env bash
           set -euo pipefail
 
-          cd "$HOME/fabula"
+          cd /var/www/fabula
+
+          export COMPOSE_PROJECT_NAME=fabula
+
+          set -a
+          . ./.env.deploy
+          set +a
 
           echo "Pulling exact Git SHA images..."
-          docker compose pull
+          docker compose -p fabula pull postgres backend frontend
 
           echo "Running database migrations..."
-          docker compose exec -T backend alembic upgrade head
+          docker compose -p fabula run --rm backend alembic upgrade head
 
           echo "Starting updated containers..."
-          docker compose up -d --remove-orphans
+          docker compose -p fabula up -d backend frontend
 
           echo "Waiting for application health check..."
           for attempt in {1..20}; do
@@ -283,8 +289,8 @@ jobs:
           done
 
           echo "Health check failed."
-          docker compose ps
-          docker compose logs --tail=100 backend
+          docker compose -p fabula ps
+          docker compose -p fabula logs --tail=100 backend
           exit 1
           EOF
 
@@ -298,7 +304,7 @@ jobs:
           ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
             "$VPS_USER@$VPS_HOST" \
-            'mkdir -p "$HOME/fabula"'
+            'mkdir -p /var/www/fabula && chown -R "$VPS_USER":"$VPS_USER" /var/www/fabula'
 
       - name: Copy deployment files to VPS
         env:
@@ -308,7 +314,7 @@ jobs:
           scp -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
             docker-compose.yml deploy.sh \
-            "$VPS_USER@$VPS_HOST:~/fabula/"
+            "$VPS_USER@$VPS_HOST:/var/www/fabula/"
 
       - name: Deploy on VPS
         env:
@@ -318,7 +324,7 @@ jobs:
           ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
             "$VPS_USER@$VPS_HOST" \
-            'bash "$HOME/fabula/deploy.sh"'
+            'bash /var/www/fabula/deploy.sh'
 
       - name: Check local health
         run: |
