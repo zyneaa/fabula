@@ -37,10 +37,14 @@ def test_upload_material(client, mock_db, tmp_path):
     config_result = MagicMock()
     config_result.scalars.return_value.first.return_value = None  # No LLM config exists
     
+    # Count result - scalar() should return an integer, not a MagicMock
+    count_result = MagicMock()
+    count_result.scalar.return_value = 0  # 0 existing materials
+    
     conversation_result = MagicMock()
     conversation_result.scalar_one_or_none.return_value = None  # No conversation yet
     
-    mock_db.execute = AsyncMock(side_effect=[config_result, conversation_result])
+    mock_db.execute = AsyncMock(side_effect=[config_result, count_result, conversation_result])
     mock_db.commit = AsyncMock()
 
     async def mock_refresh(obj):
