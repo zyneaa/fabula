@@ -275,17 +275,14 @@ jobs:
             DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
           fi
 
-          echo "Starting base services (postgres) first..."
-          docker compose -p fabula up -d postgres
+          echo "Starting all services..."
+          docker compose -p fabula --env-file .env.deploy up -d
 
-          echo "Waiting for postgres to be ready..."
-          sleep 10
+          echo "Waiting for services to be ready..."
+          sleep 15
 
           echo "Running database migrations..."
-          docker compose -p fabula --env-file .env.deploy run --rm --no-deps --entrypoint python backend -m alembic upgrade head
-
-          echo "Starting all services..."
-          docker compose -p fabula up -d
+          docker compose -p fabula --env-file .env.deploy exec -T backend alembic upgrade head
 
           echo "Waiting for application health check..."
           for attempt in {1..20}; do
