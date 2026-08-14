@@ -282,7 +282,7 @@ jobs:
           sleep 15
 
           echo "Running database migrations..."
-          docker compose -p fabula exec -T backend python -m alembic upgrade head
+          docker compose -p fabula exec -T -e DATABASE_URL="${DATABASE_URL}" backend python -m alembic upgrade head
 
           echo "Waiting for application health check..."
           for attempt in {1..20}; do
