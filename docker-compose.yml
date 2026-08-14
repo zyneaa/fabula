@@ -19,16 +19,12 @@ services:
   backend:
     image: ${DOCKERHUB_IMAGE_NAME}:${IMAGE_TAG}
     restart: unless-stopped
+    env_file:
+      - .env.app
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_ALGORITHM=${JWT_ALGORITHM}
-      - JWT_EXPIRE_MINUTES=${JWT_EXPIRE_MINUTES}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - DEFAULT_LLM_MODEL=${DEFAULT_LLM_MODEL}
+      - DATABASE_URL=${DATABASE_URL}
       - UPLOAD_DIR=./uploads
       - MAX_UPLOAD_SIZE_MB=50
-      - CORS_ORIGINS=["http://localhost:3000","http://localhost:5173","http://localhost:3001","https://yourdomain.com"]
       - PYTHONPATH=/app
     volumes:
       - fabula_uploads:/app/uploads
