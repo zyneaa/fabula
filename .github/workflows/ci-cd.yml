@@ -6,118 +6,130 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  DOCKERHub_IMAGE_NAME: fabula/fabula
+  DOCKERHUB_IMAGE_NAME: fabula/fabula
+  PYTHON_VERSION: "3.13"
 
 jobs:
-  # Build and Test Job
   build-and-test:
     name: Build and Test
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
-          python-version: '3.14'
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements.txt
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest
+          pip install pytest ruff
 
       - name: Run backend tests
-        run: |
-          pytest tests/ -v --tb=short || echo "Tests failed - proceeding with build"
+        run: pytest tests/ -v --tb=short
 
-      - name: Run linter
-        run: |
-          pip install ruff
-          ruff check app/ tests/
-          ruff format app/ tests/ --check
+      - name: Run Ruff lint
+        run: ruff check app/ tests/ --output-format=github
+
+      - name: Check Ruff formatting
+        run: ruff format app/ tests/ --check
 
       - name: Build Docker image
         run: |
-          docker build -t ${{ env.IMAGE_NAME }}:latest -t ${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          docker build \
+            -t "${{ env.IMAGE_NAME }}:latest" \
+            -t "${{ env.IMAGE_NAME }}:${{ github.sha }}" \
+            .
 
-      - name: Build Docker image without tests
+      - name: Validate Docker image metadata
         run: |
-          echo "Skipping container test - Docker-in-Docker not available on GitHub Actions"
-          echo "Docker image build would be validated on VPS during deployment"
+          docker image inspect "${{ env.IMAGE_NAME }}:latest" >/dev/null
+          echo "Docker image built successfully."
 
-  # Security Scan Job
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
     needs: build-and-test
-    timeout-minutes: 20
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
+    timeout-minutes: 20
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
-          python-version: '3.14'
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: fabula_scanner/requirements.txt
 
       - name: Install scanner dependencies
+        working-directory: fabula_scanner
         run: |
-          cd fabula_scanner
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyyaml rich colorama
 
       - name: Run Fabula Security Scanner
-        id: security_scan
         env:
           TARGET_URL: ${{ secrets.TARGET_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        working-directory: fabula_scanner
         run: |
-          cd fabula_scanner
-          if [ -z "$TARGET_URL" ]; then
-            echo "TARGET_URL not set, scanning localhost for testing"
-            python fabula.py --target http://localhost:8000 --output reports/ci-scan --format json || true
-          else
-            python fabula.py --target "$TARGET_URL" --output reports/ci-scan --format json || true
+          set -euo pipefail
+          mkdir -p reports
+
+          if [ -z "${TARGET_URL:-}" ]; then
+            echo "TARGET_URL is not configured. A reachable deployed URL is required."
+            exit 1
           fi
 
-      - name: Check scan results for HIGH/CRITICAL findings
-        id: check_results
+          python fabula.py \
+            --target "$TARGET_URL" \
+            --output reports/ci-scan \
+            --format json
+
+      - name: Check scan results for critical findings
+        working-directory: fabula_scanner/reports
         run: |
-          cd fabula_scanner/reports
-          if [ -f ci-scan.json ]; then
-            CRITICAL=$(cat ci-scan.json | python -c "import sys,json; d=json.load(sys.stdin); print(d.get('summary',{}).get('critical',0))" 2>/dev/null || echo "0")
-            HIGH=$(cat ci-scan.json | python -c "import sys,json; d=json.load(sys.stdin); print(d.get('summary',{}).get('high',0))" 2>/dev/null || echo "0")
-            
-            echo "Critical: $CRITICAL, High: $HIGH"
-            
-            if [ "$CRITICAL" -gt 0 ]; then
-              echo "SECURITY_FAILED=true" >> $GITHUB_ENV
-              echo "❌ CRITICAL vulnerabilities found! Build blocked."
-              echo "🔍 Review the security scan report for details."
-              exit 1
-            else
-              echo "SECURITY_FAILED=false" >> $GITHUB_ENV
-              echo "✅ No CRITICAL vulnerabilities found. Build proceeding."
-              echo "ℹ️ Review HIGH/MEDIUM findings for improvement opportunities."
-            fi
-          else
-            echo "⚠️ Scan report not found, proceeding with caution"
-            echo "SECURITY_FAILED=false" >> $GITHUB_ENV
+          set -euo pipefail
+
+          if [ ! -f ci-scan.json ]; then
+            echo "ci-scan.json was not generated."
+            exit 1
           fi
 
-      - name: Upload scan report
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+          CRITICAL="$(python -c 'import json, sys; print(json.load(sys.stdin).get("summary", {}).get("critical", 0))' < ci-scan.json)"
+          HIGH="$(python -c 'import json, sys; print(json.load(sys.stdin).get("summary", {}).get("high", 0))' < ci-scan.json)"
+
+          echo "Critical findings: $CRITICAL"
+          echo "High findings: $HIGH"
+
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "Critical vulnerabilities found; blocking image publication and deployment."
+            exit 1
+          fi
+
+          echo "No critical vulnerabilities found."
+
+      - name: Upload security scan report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: security-scan-report
@@ -125,16 +137,60 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
-  # Build and Push Docker Images Job
+  security-summary:
+    name: Security Scan Summary
+    runs-on: ubuntu-latest
+    needs: [build-and-test, security-scan]
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Download security scan report
+        id: download-report
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: security-scan-report
+          path: fabula_scanner/reports/
+
+      - name: Generate security summary
+        if: always()
+        run: |
+          set -euo pipefail
+
+          REPORT="fabula_scanner/reports/ci-scan.json"
+          if [ ! -f "$REPORT" ]; then
+            echo "No security scan report was available."
+            exit 0
+          fi
+
+          python - "$REPORT" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as report_file:
+              data = json.load(report_file)
+
+          summary = data.get("summary", {})
+          print("=== Security Scan Summary ===")
+          print(f"Target: {data.get('target', 'N/A')}")
+          print(f"Total Findings: {sum(summary.values())}")
+          print(f"  Critical: {summary.get('critical', 0)}")
+          print(f"  High: {summary.get('high', 0)}")
+          print(f"  Medium: {summary.get('medium', 0)}")
+          print(f"  Low: {summary.get('low', 0)}")
+          print(f"  Info: {summary.get('info', 0)}")
+          PY
+
   build-and-push-images:
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
-    needs: security-scan
+    needs: [build-and-test, security-scan]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -148,50 +204,32 @@ jobs:
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata for Docker Hub
-        id: meta-dockerhub
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.DOCKERHub_IMAGE_NAME }}
-
-      - name: Extract metadata for GitHub Container Registry
-        id: meta-ghcr
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-
-      - name: Build and push Docker Hub images
-        uses: docker/build-push-action@v5
+      - name: Build and push backend image to Docker Hub
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ env.DOCKERHub_IMAGE_NAME }}:latest
-            ${{ env.DOCKERHub_IMAGE_NAME }}:${{ github.sha }}
-          labels: |
-            ${{ steps.meta-dockerhub.outputs.labels }}
-          build-args: |
-            OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
+            ${{ env.DOCKERHUB_IMAGE_NAME }}:latest
+            ${{ env.DOCKERHUB_IMAGE_NAME }}:${{ github.sha }}
 
-      - name: Build and push frontend to Docker Hub
-        uses: docker/build-push-action@v5
+      - name: Build and push frontend image to Docker Hub
+        uses: docker/build-push-action@v6
         with:
           context: ./client
           file: ./client/Dockerfile
           push: true
           tags: |
-            ${{ env.DOCKERHub_IMAGE_NAME }}:frontend-latest
-            ${{ env.DOCKERHub_IMAGE_NAME }}:frontend-${{ github.sha }}
-          labels: |
-            type=frontend
+            ${{ env.DOCKERHUB_IMAGE_NAME }}:frontend-latest
+            ${{ env.DOCKERHUB_IMAGE_NAME }}:frontend-${{ github.sha }}
 
-      - name: Build and push to GitHub Container Registry
-        uses: docker/build-push-action@v5
+      - name: Build and push backend image to GHCR
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
@@ -199,135 +237,110 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          labels: |
-            ${{ steps.meta-ghcr.outputs.labels }}
 
-  # Deployment Job
   deploy:
     name: Deploy to VPS
     runs-on: ubuntu-latest
     needs: build-and-push-images
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
+    timeout-minutes: 20
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate deployment configuration
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
         run: |
-          if [ -z "${{ secrets.VPS_HOST }}" ]; then
-            echo "❌ VPS_HOST not configured"
-            exit 1
-          fi
-          if [ -z "${{ secrets.VPS_USER }}" ]; then
-            echo "❌ VPS_USER not configured"
-            exit 1
-          fi
-          if [ -z "${{ secrets.VPS_SSH_KEY }}" ]; then
-            echo "❌ VPS_SSH_KEY not configured"
-            exit 1
-          fi
-          echo "✅ Deployment configuration validated"
+          set -euo pipefail
+          test -n "$VPS_HOST" || { echo "VPS_HOST is not configured"; exit 1; }
+          test -n "$VPS_USER" || { echo "VPS_USER is not configured"; exit 1; }
+          test -n "$VPS_SSH_KEY" || { echo "VPS_SSH_KEY is not configured"; exit 1; }
+          test -f docker-compose.yml || { echo "docker-compose.yml is missing"; exit 1; }
 
       - name: Create SSH configuration
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
         run: |
+          set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-      - name: Deploy to VPS
+      - name: Create deployment script
+        run: |
+          cat > deploy.sh <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          cd "$HOME/fabula"
+
+          echo "Pulling latest Docker images..."
+          docker compose pull
+
+          echo "Starting updated containers..."
+          docker compose up -d --remove-orphans
+
+          echo "Running database migrations..."
+          docker compose exec -T backend alembic upgrade head
+
+          echo "Waiting for application health check..."
+          for attempt in {1..20}; do
+            if curl --fail --silent http://localhost:8000/health >/dev/null; then
+              echo "Deployment successful."
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Health check failed."
+          docker compose ps
+          docker compose logs --tail=100 backend
+          exit 1
+          EOF
+
+          chmod +x deploy.sh
+
+      - name: Prepare VPS directory
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
-          echo "Deploying to $VPS_USER@$VPS_HOST..."
-          
-          # Create deployment script
-          cat > deploy.sh << 'EOF'
-          #!/bin/bash
-          set -e
-          
-          # Pull latest code
-          echo "Pulling latest code..."
-          git pull origin main
-          
-          # Stop current containers (with zero-downtime)
-          echo "Stopping current containers..."
-          docker compose down || true
-          
-          # Pull latest images
-          echo "Pulling latest Docker images..."
-          docker compose pull
-          
-          # Start new containers
-          echo "Starting new containers..."
-          docker compose up -d
-          
-          # Run migrations
-          echo "Running database migrations..."
-          docker compose exec -T backend alembic upgrade head
-          
-          # Health check
-          echo "Running health check..."
-          sleep 10
-          curl -f http://localhost:8000/health || (echo "Health check failed" && exit 1)
-          
-          echo "✅ Deployment successful!"
-          EOF
-          
-          chmod +x deploy.sh
-          
-          # Copy deployment script to VPS
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST "
-            mkdir -p ~/fabula
-            cd ~/fabula
-            git pull origin main || git clone https://github.com/${{ github.repository }}.git .
-          "
-          
-          # Run deployment on VPS
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no $VPS_USER@$VPS_HOST "
-            cd ~/fabula
-            chmod +x deploy.sh
-            ./deploy.sh
-          "
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            "$VPS_USER@$VPS_HOST" \
+            'mkdir -p "$HOME/fabula"'
+
+      - name: Copy deployment files to VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          scp -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            docker-compose.yml deploy.sh \
+            "$VPS_USER@$VPS_HOST:~/fabula/"
+
+      - name: Deploy on VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            "$VPS_USER@$VPS_HOST" \
+            'bash "$HOME/fabula/deploy.sh"'
 
       - name: Notify deployment success
         if: success()
-        run: |
-          echo "✅ Deployment to VPS completed successfully!"
-          echo "🔍 View your application at: ${{ secrets.TARGET_URL }}"
+        run: echo "Deployment to VPS completed successfully."
 
       - name: Notify deployment failure
         if: failure()
         run: |
-          echo "❌ Deployment failed!"
-          echo "Please check the logs for details."
+          echo "Deployment failed. Review the deploy job logs."
           exit 1
-
-  # Security Scan Summary Job (runs after security scan completes)
-  security-summary:
-    name: Security Scan Summary
-    runs-on: ubuntu-latest
-    needs: [security-scan, build-and-test]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
-    steps:
-      - name: Download scan report
-        uses: actions/download-artifact@v4
-        with:
-          name: security-scan-report
-          path: fabula_scanner/reports/
-
-      - name: Generate summary
-        if: always() && hashFiles('fabula_scanner/reports/ci-scan.json') != ''
-        run: |
-          cd fabula_scanner/reports
-          if [ -f ci-scan.json ]; then
-            echo "=== Security Scan Summary ==="
-            python -c 'import sys, json; d=json.load(sys.stdin); summary=d.get("summary", {}); print(f"Target: {d.get(\"target\", \"N/A\")}"); print(f"Total Findings: {sum(summary.values())}"); print(f"  Critical: {summary.get(\"critical\", 0)}"); print(f"  High: {summary.get(\"high\", 0)}"); print(f"  Medium: {summary.get(\"medium\", 0)}"); print(f"  Low: {summary.get(\"low\", 0)}"); print(f"  Info: {summary.get(\"info\", 0)}")' < ci-scan.json
-            echo ""
-            echo "📄 Full report available in artifact: security-scan-report"
-          else
-            echo "⚠️ No security scan report found"
-          fi
