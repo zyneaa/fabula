@@ -23,11 +23,12 @@ telegram:
   # Set these as environment variables:
   #   TELEGRAM_BOT_TOKEN=your-token-here
   #   TELEGRAM_CHAT_ID=your-chat-id-here
+  # Or set in fabula_scanner/.env file
   bot_token: ${TELEGRAM_BOT_TOKEN}
-  chat_id: "1812677220"
+  chat_id: ${TELEGRAM_CHAT_ID}
   
   # Alert settings
-  enabled: false
+  enabled: true
   alert_threshold: HIGH
   include_critical: true
   include_high: true
