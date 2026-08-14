@@ -13,7 +13,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  DOCKERHUB_IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/fabula
+  DOCKERHUB_IMAGE_NAME: bakawolf/fabula
   PYTHON_VERSION: "3.13"
 
 jobs:
