@@ -10,25 +10,12 @@ from alembic import context
 from app.config import settings
 from app.models import Base
 
-from pydantic_settings import BaseSettings
-from configparser import Interpolation
-
-
-class DisableInterpolation(Interpolation):
-    def before_get(self, parser, section, option, value, defaults):
-        return value
-
-    def before_set(self, parser, section, option, value):
-        return value
-
-
 config = context.config
-config.interpolation = DisableInterpolation()
 
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
-
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# ConfigParser treats '%' as interpolation syntax.
+# Escape percent signs before passing the URL to Alembic.
+alembic_database_url = settings.DATABASE_URL.replace("%", "%%")
+config.set_main_option("sqlalchemy.url", alembic_database_url)
 
 target_metadata = Base.metadata
 
