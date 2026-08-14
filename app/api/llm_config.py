@@ -170,9 +170,7 @@ async def get_config(
     user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
 ):
     if user.role == UserRole.admin:
-        result = await db.execute(
-            select(LLMConfig).where(LLMConfig.id == config_id)
-        )
+        result = await db.execute(select(LLMConfig).where(LLMConfig.id == config_id))
     else:
         result = await db.execute(
             select(LLMConfig).where(
@@ -194,9 +192,7 @@ async def update_config(
     user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
 ):
     if user.role == UserRole.admin:
-        result = await db.execute(
-            select(LLMConfig).where(LLMConfig.id == config_id)
-        )
+        result = await db.execute(select(LLMConfig).where(LLMConfig.id == config_id))
     else:
         result = await db.execute(
             select(LLMConfig).where(
@@ -245,9 +241,7 @@ async def delete_config(
     user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
 ):
     if user.role == UserRole.admin:
-        result = await db.execute(
-            select(LLMConfig).where(LLMConfig.id == config_id)
-        )
+        result = await db.execute(select(LLMConfig).where(LLMConfig.id == config_id))
     else:
         result = await db.execute(
             select(LLMConfig).where(

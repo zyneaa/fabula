@@ -40,7 +40,9 @@ async def generate_notes(
         all_chunks.extend(chunks)
 
     if not all_chunks:
-        raise ValueError(f"No chunks found for materials in conversation {conversation_id}")
+        raise ValueError(
+            f"No chunks found for materials in conversation {conversation_id}"
+        )
 
     # Combine chunks into content
     content = "\n\n".join([chunk.text for chunk in all_chunks])

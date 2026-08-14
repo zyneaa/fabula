@@ -148,18 +148,18 @@ def test_assign_config_to_student(client, mock_db, mock_teacher, mock_student):
         max_materials=5,
         created_at=datetime.now(timezone.utc),
     )
-    
+
     config_result = MagicMock()
     config_result.scalar_one_or_none.return_value = config
-    
+
     student_result = MagicMock()
     student_result.scalar_one_or_none.return_value = mock_student
-    
+
     existing_result = MagicMock()
     existing_result.scalars.return_value.all.return_value = []
-    
+
     call_count = [0]
-    
+
     def execute_side_effect(query):
         call_count[0] += 1
         if call_count[0] == 1:
@@ -169,16 +169,16 @@ def test_assign_config_to_student(client, mock_db, mock_teacher, mock_student):
         elif call_count[0] == 3:
             return existing_result
         return MagicMock()
-    
+
     mock_db.execute = AsyncMock(side_effect=execute_side_effect)
     mock_db.add = MagicMock()
     mock_db.delete = AsyncMock()
     mock_db.commit = AsyncMock()
-    
+
     async def mock_refresh(obj):
         obj.id = 1
         obj.assigned_at = datetime.now(timezone.utc)
-    
+
     mock_db.refresh = mock_refresh
 
     response = client.post(
@@ -205,7 +205,7 @@ def test_list_student_configs(client, mock_db, mock_teacher, mock_student):
         max_materials=5,
         created_at=datetime.now(timezone.utc),
     )
-    
+
     assignment = StudentLLMConfig(
         id=1,
         student_id=mock_student.id,
@@ -213,16 +213,16 @@ def test_list_student_configs(client, mock_db, mock_teacher, mock_student):
         teacher_id=mock_teacher.id,
         assigned_at=datetime.now(timezone.utc),
     )
-    
+
     student_result = MagicMock()
     student_result.scalar_one_or_none.return_value = mock_student
-    
+
     assignment_result = MagicMock()
     assignment_result.scalars.return_value.all.return_value = [assignment]
-    
+
     config_result = MagicMock()
     config_result.scalar_one_or_none.return_value = config
-    
+
     def execute_side_effect(query):
         if "users" in str(query) and "student" in str(query):
             return student_result
@@ -231,7 +231,7 @@ def test_list_student_configs(client, mock_db, mock_teacher, mock_student):
         elif "llm_configs" in str(query):
             return config_result
         return MagicMock()
-    
+
     mock_db.execute = AsyncMock(side_effect=execute_side_effect)
 
     response = client.get(f"/llm-configs/student/{mock_student.id}")
@@ -250,7 +250,7 @@ def test_remove_config_assignment(client, mock_db, mock_teacher):
         teacher_id=mock_teacher.id,
         assigned_at=datetime.now(timezone.utc),
     )
-    
+
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = assignment
     mock_db.execute = AsyncMock(return_value=mock_result)

@@ -1,23 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
-from app.models.chat import Conversation, MessageRole
 from app.services.chat import (
-    add_message,
     create_conversation,
     delete_conversation,
+    generate_conversation_title,
     get_conversation,
-    get_user_conversations,
     get_conversation_messages,
-    get_conversation_context,
+    get_user_conversations,
     process_student_query,
     rename_conversation,
-    generate_conversation_title,
 )
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -70,12 +66,14 @@ async def list_conversations(
     result = []
     for conv in conversations:
         messages = await get_conversation_messages(conv.id, db)
-        result.append({
-            "id": conv.id,
-            "title": conv.title,
-            "created_at": conv.created_at.isoformat(),
-            "message_count": len(messages),
-        })
+        result.append(
+            {
+                "id": conv.id,
+                "title": conv.title,
+                "created_at": conv.created_at.isoformat(),
+                "message_count": len(messages),
+            }
+        )
 
     return result
 
@@ -145,7 +143,9 @@ async def rename_conversation_endpoint(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    conversation = await rename_conversation(conversation_id, current_user.id, request.title, db)
+    conversation = await rename_conversation(
+        conversation_id, current_user.id, request.title, db
+    )
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return {
@@ -173,5 +173,7 @@ async def generate_title(
 ):
     title = await generate_conversation_title(conversation_id, current_user.id, db)
     if title is None:
-        raise HTTPException(status_code=404, detail="Conversation not found or no messages")
+        raise HTTPException(
+            status_code=404, detail="Conversation not found or no messages"
+        )
     return {"title": title}

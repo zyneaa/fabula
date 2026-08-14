@@ -1,18 +1,22 @@
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core.exceptions import BadRequestException, NotFoundException, ForbiddenException
+from app.core.exceptions import (
+    BadRequestException,
+    ForbiddenException,
+    NotFoundException,
+)
 from app.database import get_db
 from app.dependencies import get_current_user, get_upload_file
+from app.models.llm_config import LLMConfig, StudentLLMConfig
 from app.models.material import Chunk, Material, MaterialStatus
 from app.models.user import User
-from app.models.llm_config import StudentLLMConfig, LLMConfig
 from app.services.chunker import chunk_text, estimate_tokens
 from app.services.file_parser import parse_file
 
@@ -50,12 +54,14 @@ async def process_material(material_id: int, file_path: str):
             chunks = chunk_text(text)
 
             for i, chunk in enumerate(chunks):
-                db.add(Chunk(
-                    material_id=material_id,
-                    text=chunk,
-                    chunk_index=i,
-                    token_count=estimate_tokens(chunk),
-                ))
+                db.add(
+                    Chunk(
+                        material_id=material_id,
+                        text=chunk,
+                        chunk_index=i,
+                        token_count=estimate_tokens(chunk),
+                    )
+                )
 
             material.status = MaterialStatus.ready
             await db.commit()
@@ -82,7 +88,9 @@ async def upload_material_standalone(
     content = await file.read()
     max_size = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
     if len(content) > max_size:
-        raise BadRequestException(f"File too large (max {settings.MAX_UPLOAD_SIZE_MB}MB)")
+        raise BadRequestException(
+            f"File too large (max {settings.MAX_UPLOAD_SIZE_MB}MB)"
+        )
 
     user_dir = Path(settings.UPLOAD_DIR) / str(user.id)
     user_dir.mkdir(parents=True, exist_ok=True)
@@ -112,7 +120,9 @@ async def upload_material_standalone(
     )
 
 
-@router.post("/conversation/{conversation_id}", response_model=MaterialResponse, status_code=201)
+@router.post(
+    "/conversation/{conversation_id}", response_model=MaterialResponse, status_code=201
+)
 async def upload_material_to_conversation(
     conversation_id: int,
     background_tasks: BackgroundTasks,
@@ -138,7 +148,7 @@ async def upload_material_to_conversation(
         .order_by(StudentLLMConfig.assigned_at.desc())
     )
     config = config_result.scalars().first()
-    
+
     max_materials = config.max_materials if config else 5
 
     # Check current material count for this conversation
@@ -151,12 +161,16 @@ async def upload_material_to_conversation(
     current_count = count_result.scalar()
 
     if current_count >= max_materials:
-        raise ForbiddenException(f"Maximum {max_materials} materials allowed per conversation")
+        raise ForbiddenException(
+            f"Maximum {max_materials} materials allowed per conversation"
+        )
 
     content = await file.read()
     max_size = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
     if len(content) > max_size:
-        raise BadRequestException(f"File too large (max {settings.MAX_UPLOAD_SIZE_MB}MB)")
+        raise BadRequestException(
+            f"File too large (max {settings.MAX_UPLOAD_SIZE_MB}MB)"
+        )
 
     user_dir = Path(settings.UPLOAD_DIR) / str(user.id)
     user_dir.mkdir(parents=True, exist_ok=True)
@@ -251,9 +265,14 @@ async def get_material(
         raise NotFoundException("Material not found")
 
     chunks_result = await db.execute(
-        select(Chunk).where(Chunk.material_id == material_id).order_by(Chunk.chunk_index)
+        select(Chunk)
+        .where(Chunk.material_id == material_id)
+        .order_by(Chunk.chunk_index)
     )
-    chunks = [{"index": c.chunk_index, "text": c.text, "tokens": c.token_count} for c in chunks_result.scalars().all()]
+    chunks = [
+        {"index": c.chunk_index, "text": c.text, "tokens": c.token_count}
+        for c in chunks_result.scalars().all()
+    ]
 
     return MaterialDetailResponse(
         id=material.id,

@@ -6,10 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException
 from app.database import get_db
-from app.dependencies import get_current_user, require_role
+from app.dependencies import require_role
 from app.models.exam_paper import ExamPaper
 from app.models.user import User, UserRole
-from app.services.exam_paper import generate_exam_papers, generate_questions_from_materials
+from app.services.exam_paper import (
+    generate_exam_papers,
+    generate_questions_from_materials,
+)
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/exam-papers", tags=["exam-papers"])
@@ -39,11 +42,18 @@ async def generate_exam_papers_background(
     async with db_session_factory() as db:
         try:
             await generate_exam_papers(
-                course_material_id, source_exam_id, teacher_id, course_id, num_papers, db
+                course_material_id,
+                source_exam_id,
+                teacher_id,
+                course_id,
+                num_papers,
+                db,
             )
             logger.info("Exam papers generation completed", course_id=course_id)
         except Exception as e:
-            logger.error("Exam papers generation failed", error=str(e), course_id=course_id)
+            logger.error(
+                "Exam papers generation failed", error=str(e), course_id=course_id
+            )
 
 
 @router.post("/generate", status_code=202)
@@ -90,7 +100,11 @@ async def generate_questions(
     db.add(paper)
     await db.commit()
     await db.refresh(paper)
-    return {"id": paper.id, "content": content, "created_at": paper.created_at.isoformat()}
+    return {
+        "id": paper.id,
+        "content": content,
+        "created_at": paper.created_at.isoformat(),
+    }
 
 
 @router.get("/course/{course_id}")
@@ -102,7 +116,9 @@ async def get_exam_papers_by_course(
     """Get all exam papers for a specific course."""
     result = await db.execute(
         select(ExamPaper)
-        .where(ExamPaper.course_id == course_id, ExamPaper.teacher_id == current_user.id)
+        .where(
+            ExamPaper.course_id == course_id, ExamPaper.teacher_id == current_user.id
+        )
         .order_by(ExamPaper.paper_number)
     )
     papers = result.scalars().all()
@@ -112,7 +128,9 @@ async def get_exam_papers_by_course(
             "id": paper.id,
             "course_id": paper.course_id,
             "paper_number": paper.paper_number,
-            "content": paper.content[:300] + "..." if len(paper.content) > 300 else paper.content,
+            "content": paper.content[:300] + "..."
+            if len(paper.content) > 300
+            else paper.content,
             "style_profile": paper.style_profile,
             "created_at": paper.created_at.isoformat(),
         }
@@ -164,7 +182,9 @@ async def list_exam_papers(
             "id": paper.id,
             "course_id": paper.course_id,
             "paper_number": paper.paper_number,
-            "content": paper.content[:300] + "..." if len(paper.content) > 300 else paper.content,
+            "content": paper.content[:300] + "..."
+            if len(paper.content) > 300
+            else paper.content,
             "created_at": paper.created_at.isoformat(),
         }
         for paper in papers
@@ -186,6 +206,6 @@ async def delete_exam_paper(
     paper = result.scalar_one_or_none()
     if not paper:
         raise NotFoundException("Exam paper not found")
-    
+
     await db.delete(paper)
     await db.commit()

@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import String, Enum, DateTime, ForeignKey, Text, JSON, func
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.user import Base
@@ -18,7 +18,9 @@ class UniInfo(Base):
     __tablename__ = "uni_info"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    teacher_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
     category: Mapped[UniInfoCategory] = mapped_column(Enum(UniInfoCategory), index=True)
     title: Mapped[str] = mapped_column(String(255))
     content: Mapped[str] = mapped_column(Text)

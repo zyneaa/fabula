@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.chat import Conversation, Message, MessageRole
-from app.models.material import Material, Chunk, MaterialStatus
+from app.models.material import Chunk, Material, MaterialStatus
 from app.models.uni_info import UniInfo
 from app.services.llm import generate_with_student_config
 
@@ -67,6 +67,7 @@ async def generate_conversation_title(
     )
     try:
         from app.services.llm import generate_with_student_config
+
         title = await generate_with_student_config(
             [{"role": "user", "content": prompt}], user_id, db
         )
@@ -198,7 +199,9 @@ async def get_conversation_context(
                 if uni_info_entries:
                     context_parts.append("\n\n=== UNIVERSITY INFORMATION ===")
                     for entry in uni_info_entries:
-                        context_parts.append(f"\n[{entry.category.value.upper()}] {entry.title}")
+                        context_parts.append(
+                            f"\n[{entry.category.value.upper()}] {entry.title}"
+                        )
                         context_parts.append(entry.content)
 
     if not context_parts:
@@ -239,7 +242,7 @@ async def process_student_query(
     4. Add assistant response to conversation
     5. Return the assistant message
     """
-# Build history from past messages (before saving current query)
+    # Build history from past messages (before saving current query)
     past_messages = await get_conversation_messages(conversation_id, db)
     history = []
     for msg in past_messages:
@@ -276,10 +279,10 @@ Context:
         *history,
         {"role": "user", "content": query},
     ]
-    
+
     # Generate response using LLM
     response = await generate_with_student_config(messages, user_id, db)
-    
+
     # Add assistant message
     assistant_message = await add_message(
         conversation_id=conversation_id,
@@ -287,5 +290,5 @@ Context:
         content=response,
         db=db,
     )
-    
+
     return assistant_message

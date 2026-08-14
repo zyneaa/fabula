@@ -4,8 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import UnauthorizedException
-from app.core.security import create_access_token, hash_password, verify_password
 from app.core.rate_limit import limiter
+from app.core.security import create_access_token, hash_password, verify_password
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User, UserRole
@@ -69,7 +69,9 @@ async def update_profile(
     if req.name is not None:
         user.name = req.name
     if req.new_password:
-        if not req.current_password or not verify_password(req.current_password, user.password_hash):
+        if not req.current_password or not verify_password(
+            req.current_password, user.password_hash
+        ):
             raise UnauthorizedException("Current password is incorrect")
         user.password_hash = hash_password(req.new_password)
     await db.commit()

@@ -1,9 +1,7 @@
 from datetime import datetime, timezone
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import UploadFile
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -23,14 +21,13 @@ def mock_db():
 @pytest.fixture
 def mock_background_tasks():
     """Mock BackgroundTasks.add_task to prevent actual background processing."""
-    from unittest.mock import patch
-    
+
     def _patch_add_task():
         def mock_add_task(self, *args, **kwargs):
             pass  # Don't actually run background task
-        
-        return patch('fastapi.BackgroundTasks.add_task', mock_add_task)
-    
+
+        return patch("fastapi.BackgroundTasks.add_task", mock_add_task)
+
     return _patch_add_task
 
 
@@ -55,27 +52,28 @@ def test_upload_material(client, mock_db, mock_background_tasks, tmp_path):
     # 2. Material count query
     config_result = MagicMock()
     config_result.scalars.return_value.first.return_value = None
-    
+
     count_result = MagicMock()
     count_result.scalar.return_value = 0
-    
+
     mock_db.execute = AsyncMock(side_effect=[config_result, count_result])
 
     # Mock refresh to set uploaded_at on the material object
     def mock_refresh(material):
         material.id = 1
         material.uploaded_at = datetime.now(timezone.utc)
+
     mock_db.refresh = AsyncMock(side_effect=mock_refresh)
 
     file_content = b"test content"
-    
+
     # Patch add_task to prevent background task from running
     with mock_background_tasks():
         response = client.post(
-        "/materials/conversation/1",
-        files={"file": ("test.txt", file_content, "text/plain")},
-    )
-    
+            "/materials/conversation/1",
+            files={"file": ("test.txt", file_content, "text/plain")},
+        )
+
     assert response.status_code == 201
     data = response.json()
     assert data["title"] == "test.txt"

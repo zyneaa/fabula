@@ -1,12 +1,12 @@
-from fastapi import Depends, UploadFile, File
+from fastapi import Depends, File, UploadFile
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
+    BadRequestException,
     ForbiddenException,
     UnauthorizedException,
-    BadRequestException,
 )
 from app.core.security import decode_access_token
 from app.database import get_db

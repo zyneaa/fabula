@@ -1,4 +1,5 @@
 import json
+
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +17,7 @@ async def generate_quiz(
     db: AsyncSession,
 ) -> Quiz:
     """Generate quiz questions from conversation materials using LLM."""
-    
+
     # Fetch ready materials for this conversation
     result = await db.execute(
         select(Material).where(
@@ -26,10 +27,10 @@ async def generate_quiz(
         )
     )
     materials = result.scalars().all()
-    
+
     if not materials:
         raise ValueError(f"No ready materials found for conversation {conversation_id}")
-    
+
     # Fetch all chunks from all materials
     all_chunks = []
     for material in materials:
@@ -40,13 +41,15 @@ async def generate_quiz(
         )
         chunks = result.scalars().all()
         all_chunks.extend(chunks)
-    
+
     if not all_chunks:
-        raise ValueError(f"No chunks found for materials in conversation {conversation_id}")
-    
+        raise ValueError(
+            f"No chunks found for materials in conversation {conversation_id}"
+        )
+
     # Combine chunks into content
     content = "\n\n".join([chunk.text for chunk in all_chunks])
-    
+
     # Generate quiz using LLM
     messages = [
         {
@@ -81,9 +84,9 @@ Ensure the JSON is valid and properly formatted.""",
             "content": f"Generate 10 quiz questions from the following material:\n\n{content}",
         },
     ]
-    
+
     response = await generate_with_student_config(messages, user_id, db)
-    
+
     # Parse JSON response
     try:
         # Try to extract JSON from response (in case LLM adds extra text)
@@ -96,8 +99,8 @@ Ensure the JSON is valid and properly formatted.""",
             quiz_data = json.loads(response)
     except json.JSONDecodeError as e:
         logger.error("Failed to parse quiz JSON", error=str(e), response=response)
-        raise ValueError(f"Failed to parse quiz response: {str(e)}")
-    
+        raise ValueError(f"Failed to parse quiz response: {e!s}")
+
     # Save to database (quiz is tied to conversation, not individual material)
     quiz = Quiz(
         material_id=materials[0].id,
@@ -107,7 +110,7 @@ Ensure the JSON is valid and properly formatted.""",
     db.add(quiz)
     await db.commit()
     await db.refresh(quiz)
-    
+
     logger.info(
         "Generated quiz",
         conversation_id=conversation_id,
@@ -116,5 +119,5 @@ Ensure the JSON is valid and properly formatted.""",
         question_count=len(quiz_data.get("questions", [])),
         material_count=len(materials),
     )
-    
+
     return quiz

@@ -1,9 +1,10 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.quiz import generate_quiz
 from app.models.material import Chunk, Material
+from app.services.quiz import generate_quiz
 
 
 @pytest.fixture
@@ -24,11 +25,13 @@ def mock_chunks():
     chunk1 = MagicMock(spec=Chunk)
     chunk1.text = "Photosynthesis is the process by which plants convert light energy into chemical energy."
     chunk1.chunk_index = 0
-    
+
     chunk2 = MagicMock(spec=Chunk)
-    chunk2.text = "The main product of photosynthesis is glucose, which plants use for energy."
+    chunk2.text = (
+        "The main product of photosynthesis is glucose, which plants use for energy."
+    )
     chunk2.chunk_index = 1
-    
+
     return [chunk1, chunk2]
 
 
@@ -38,12 +41,12 @@ async def test_generate_quiz_success(mock_db, mock_material, mock_chunks):
     # Mock database queries - first for materials (returns list), then for chunks
     mock_result_materials = MagicMock()
     mock_result_materials.scalars.return_value.all.return_value = [mock_material]
-    
+
     mock_result_chunks = MagicMock()
     mock_result_chunks.scalars.return_value.all.return_value = mock_chunks
-    
+
     mock_db.execute = AsyncMock(side_effect=[mock_result_materials, mock_result_chunks])
-    
+
     # Mock LLM response
     mock_llm_response = """
 {
@@ -64,24 +67,24 @@ async def test_generate_quiz_success(mock_db, mock_material, mock_chunks):
   ]
 }
 """
-    
+
     with patch("app.services.quiz.generate_with_student_config") as mock_llm:
         mock_llm.return_value = mock_llm_response
-        
+
         # Mock quiz creation
         mock_quiz = MagicMock()
         mock_quiz.id = 1
         mock_quiz.material_id = 1
         mock_quiz.user_id = 1
         mock_quiz.questions = {"questions": []}
-        
+
         mock_db.add = MagicMock()
         mock_db.commit = AsyncMock()
         mock_db.refresh = AsyncMock()
-        
+
         # Call the function
         result = await generate_quiz(1, 1, mock_db)
-        
+
         # Assertions
         assert result is not None
         mock_db.add.assert_called_once()
@@ -96,7 +99,7 @@ async def test_generate_quiz_material_not_found(mock_db):
     mock_result = MagicMock()
     mock_result.scalars.return_value.all.return_value = []
     mock_db.execute = AsyncMock(return_value=mock_result)
-    
+
     with pytest.raises(ValueError, match="No ready materials found for conversation"):
         await generate_quiz(999, 1, mock_db)
 
@@ -107,14 +110,14 @@ async def test_generate_quiz_invalid_json(mock_db, mock_material, mock_chunks):
     # The service first checks for materials (returns list), then chunks, then LLM
     mock_result_materials = MagicMock()
     mock_result_materials.scalars.return_value.all.return_value = [mock_material]
-    
+
     mock_result_chunks = MagicMock()
     mock_result_chunks.scalars.return_value.all.return_value = mock_chunks
-    
+
     mock_db.execute = AsyncMock(side_effect=[mock_result_materials, mock_result_chunks])
-    
+
     with patch("app.services.quiz.generate_with_student_config") as mock_llm:
         mock_llm.return_value = "This is not valid JSON"
-        
+
         with pytest.raises(ValueError, match="Failed to parse quiz response"):
             await generate_quiz(1, 1, mock_db)

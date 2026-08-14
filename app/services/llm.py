@@ -1,4 +1,5 @@
-from typing import Protocol, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Protocol
 
 import httpx
 import structlog
@@ -18,7 +19,9 @@ class OpenRouterProvider:
 
     def __init__(self, api_key: str | None = None):
         self.api_key = api_key or settings.OPENROUTER_API_KEY
-        self.client = httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=10.0))
+        self.client = httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=10.0)
+        )
 
     async def complete(self, messages: list[dict], model: str, **kwargs) -> str:
         if not self.api_key:
@@ -41,7 +44,9 @@ class OpenRouterProvider:
 
         if response.status_code >= 400:
             body = response.text
-            logger.error("OpenRouter error", status=response.status_code, body=body, model=model)
+            logger.error(
+                "OpenRouter error", status=response.status_code, body=body, model=model
+            )
             response.raise_for_status()
 
         data = response.json()
@@ -58,10 +63,11 @@ def get_provider() -> LLMProvider:
 async def generate_with_student_config(
     messages: list[dict], student_id: int, db: AsyncSession, **kwargs
 ) -> str:
-    from app.api.llm_config import get_student_active_config
-    from app.models.user import User
-    from app.models.system_config import SystemConfig
     from sqlalchemy import select
+
+    from app.api.llm_config import get_student_active_config
+    from app.models.system_config import SystemConfig
+    from app.models.user import User
 
     config = await get_student_active_config(student_id, db)
 
@@ -80,9 +86,7 @@ async def generate_with_student_config(
         if config.presence_penalty is not None:
             kwargs["presence_penalty"] = config.presence_penalty
     else:
-        user_result = await db.execute(
-            select(User).where(User.id == student_id)
-        )
+        user_result = await db.execute(select(User).where(User.id == student_id))
         user = user_result.scalar_one_or_none()
         if user and user.role in ("teacher", "admin"):
             sys_result = await db.execute(select(SystemConfig).limit(1))
@@ -102,8 +106,10 @@ async def generate_with_student_config_stream(
     messages: list[dict], student_id: int, db: AsyncSession, **kwargs
 ) -> AsyncIterator[str]:
     # First get full response from LLM (non-streaming for reliability)
-    full_response = await generate_with_student_config(messages, student_id, db, **kwargs)
-    
+    full_response = await generate_with_student_config(
+        messages, student_id, db, **kwargs
+    )
+
     # Then stream it character by character to frontend
     for char in full_response:
         yield char

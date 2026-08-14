@@ -39,5 +39,5 @@ def _parse_pptx(file_path: str) -> str:
     for slide in prs.slides:
         for shape in slide.shapes:
             if hasattr(shape, "text"):
-                text.append(getattr(shape, "text"))
+                text.append(shape.text)
     return "\n".join(text)

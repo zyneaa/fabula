@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import String, DateTime, ForeignKey, Integer, Text, JSON, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.user import Base
@@ -11,7 +11,9 @@ class ExamPaper(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     course_id: Mapped[str] = mapped_column(String(255), index=True)
-    teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    teacher_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
     source_exam_id: Mapped[int | None] = mapped_column(ForeignKey("materials.id"))
     paper_number: Mapped[int] = mapped_column(Integer)
     content: Mapped[str] = mapped_column(Text)

@@ -1,6 +1,16 @@
 from datetime import datetime
 
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Integer, JSON, Text, Float, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.user import Base
@@ -10,7 +20,9 @@ class LLMConfig(Base):
     __tablename__ = "llm_configs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    teacher_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
     name: Mapped[str] = mapped_column(String(100))
     provider: Mapped[str] = mapped_column(String(50))
     model_name: Mapped[str] = mapped_column(String(100))
@@ -32,8 +44,12 @@ class StudentLLMConfig(Base):
     __tablename__ = "student_llm_configs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    student_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    config_id: Mapped[int] = mapped_column(ForeignKey("llm_configs.id", ondelete="CASCADE"))
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    config_id: Mapped[int] = mapped_column(
+        ForeignKey("llm_configs.id", ondelete="CASCADE")
+    )
     teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     assigned_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

@@ -34,7 +34,7 @@ async def get_quiz_by_conversation(
     """Get quiz for a specific conversation."""
     # Quizzes are tied to materials, but we want to get quizzes for all materials in a conversation
     from app.models.material import Material
-    
+
     # Get all materials for this conversation
     materials_result = await db.execute(
         select(Material).where(
@@ -43,23 +43,25 @@ async def get_quiz_by_conversation(
         )
     )
     materials = materials_result.scalars().all()
-    
+
     if not materials:
         raise NotFoundException("No materials found for this conversation")
-    
+
     # Get quizzes for any of these materials
     material_ids = [m.id for m in materials]
     result = await db.execute(
-        select(Quiz).where(
+        select(Quiz)
+        .where(
             Quiz.material_id.in_(material_ids),
             Quiz.user_id == current_user.id,
-        ).order_by(Quiz.created_at.desc())
+        )
+        .order_by(Quiz.created_at.desc())
     )
     quizzes = result.scalars().all()
-    
+
     if not quizzes:
         raise NotFoundException("No quizzes found for this conversation")
-    
+
     return [
         {
             "id": quiz.id,
@@ -84,7 +86,7 @@ async def get_quiz(
     quiz = result.scalar_one_or_none()
     if not quiz:
         raise NotFoundException("Quiz not found")
-    
+
     return {
         "id": quiz.id,
         "material_id": quiz.material_id,
@@ -100,10 +102,12 @@ async def list_quizzes(
 ):
     """List all quizzes for the current user."""
     result = await db.execute(
-        select(Quiz).where(Quiz.user_id == current_user.id).order_by(Quiz.created_at.desc())
+        select(Quiz)
+        .where(Quiz.user_id == current_user.id)
+        .order_by(Quiz.created_at.desc())
     )
     quizzes = result.scalars().all()
-    
+
     return [
         {
             "id": quiz.id,
@@ -128,6 +132,6 @@ async def delete_quiz(
     quiz = result.scalar_one_or_none()
     if not quiz:
         raise NotFoundException("Quiz not found")
-    
+
     await db.delete(quiz)
     await db.commit()

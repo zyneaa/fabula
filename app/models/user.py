@@ -4,7 +4,7 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String, Enum, DateTime, ForeignKey, Integer, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
@@ -37,6 +37,6 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    department_rel: Mapped["Department | None"] = relationship(
+    department_rel: Mapped[Department | None] = relationship(
         "Department", back_populates="users", foreign_keys=[department_id]
     )
