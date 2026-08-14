@@ -270,6 +270,11 @@ jobs:
           . ./.env.deploy
           set +a
 
+          # Ensure DATABASE_URL is set
+          if [ -z "${DATABASE_URL:-}" ]; then
+            DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+          fi
+
           echo "Starting base services (postgres) first..."
           docker compose -p fabula up -d postgres
 
