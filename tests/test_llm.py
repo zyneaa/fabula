@@ -14,6 +14,8 @@ async def test_openrouter_complete():
     provider = OpenRouterProvider(api_key="test-key")
 
     mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = '{"choices": [{"message": {"content": "Hello!"}}]}'
     mock_response.json.return_value = {"choices": [{"message": {"content": "Hello!"}}]}
     mock_response.raise_for_status = MagicMock()
 

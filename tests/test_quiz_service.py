@@ -35,14 +35,14 @@ def mock_chunks():
 @pytest.mark.asyncio
 async def test_generate_quiz_success(mock_db, mock_material, mock_chunks):
     """Test successful quiz generation."""
-    # Mock database queries
-    mock_result_material = MagicMock()
-    mock_result_material.scalar_one_or_none.return_value = mock_material
+    # Mock database queries - first for materials (returns list), then for chunks
+    mock_result_materials = MagicMock()
+    mock_result_materials.scalars.return_value.all.return_value = [mock_material]
     
     mock_result_chunks = MagicMock()
     mock_result_chunks.scalars.return_value.all.return_value = mock_chunks
     
-    mock_db.execute = AsyncMock(side_effect=[mock_result_material, mock_result_chunks])
+    mock_db.execute = AsyncMock(side_effect=[mock_result_materials, mock_result_chunks])
     
     # Mock LLM response
     mock_llm_response = """
@@ -92,24 +92,26 @@ async def test_generate_quiz_success(mock_db, mock_material, mock_chunks):
 @pytest.mark.asyncio
 async def test_generate_quiz_material_not_found(mock_db):
     """Test quiz generation when material doesn't exist."""
+    # The service first checks for materials, returns "No ready materials found"
     mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = None
+    mock_result.scalars.return_value.all.return_value = []
     mock_db.execute = AsyncMock(return_value=mock_result)
     
-    with pytest.raises(ValueError, match="Material 999 not found"):
+    with pytest.raises(ValueError, match="No ready materials found for conversation"):
         await generate_quiz(999, 1, mock_db)
 
 
 @pytest.mark.asyncio
 async def test_generate_quiz_invalid_json(mock_db, mock_material, mock_chunks):
     """Test quiz generation with invalid JSON response."""
-    mock_result_material = MagicMock()
-    mock_result_material.scalar_one_or_none.return_value = mock_material
+    # The service first checks for materials (returns list), then chunks, then LLM
+    mock_result_materials = MagicMock()
+    mock_result_materials.scalars.return_value.all.return_value = [mock_material]
     
     mock_result_chunks = MagicMock()
     mock_result_chunks.scalars.return_value.all.return_value = mock_chunks
     
-    mock_db.execute = AsyncMock(side_effect=[mock_result_material, mock_result_chunks])
+    mock_db.execute = AsyncMock(side_effect=[mock_result_materials, mock_result_chunks])
     
     with patch("app.services.quiz.generate_with_student_config") as mock_llm:
         mock_llm.return_value = "This is not valid JSON"

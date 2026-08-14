@@ -44,7 +44,7 @@ def test_upload_material(client, mock_db, tmp_path):
 
     file_content = b"test content"
     response = client.post(
-        "/materials",
+        "/materials/conversation/1",
         files={"file": ("test.txt", file_content, "text/plain")},
     )
     assert response.status_code == 201
@@ -57,7 +57,7 @@ def test_upload_material(client, mock_db, tmp_path):
 
 def test_upload_unsupported_type(client):
     response = client.post(
-        "/materials",
+        "/materials/conversation/1",
         files={"file": ("test.xyz", b"content", "text/plain")},
     )
     assert response.status_code == 400
