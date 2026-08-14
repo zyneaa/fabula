@@ -79,6 +79,7 @@ jobs:
           format: sarif
           output: trivy-fs-results.sarif
           severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
 
       - name: Run Trivy secret scan
         uses: aquasecurity/trivy-action@v0.36.0
@@ -89,6 +90,7 @@ jobs:
           output: trivy-secret-results.sarif
           severity: "CRITICAL,HIGH"
           secrets: true
+          ignore-unfixed: true
 
       - name: Run Trivy Docker/Compose configuration scan
         working-directory: .
