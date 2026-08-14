@@ -282,7 +282,7 @@ jobs:
           sleep 10
 
           echo "Running database migrations..."
-          docker compose -p fabula --env-file .env.deploy run --rm -e DATABASE_URL="${DATABASE_URL}" --network fabula-network backend alembic upgrade head
+          docker compose -p fabula run --rm -e DATABASE_URL="${DATABASE_URL}" backend alembic upgrade head
 
           echo "Starting all services..."
           docker compose -p fabula up -d
