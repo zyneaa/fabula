@@ -101,9 +101,7 @@ async def assign_teacher(
     if not user:
         raise NotFoundException("Teacher not found")
 
-    dept_result = await db.execute(
-        select(Department).where(Department.id == req.department_id)
-    )
+    dept_result = await db.execute(select(Department).where(Department.id == req.department_id))
     dept = dept_result.scalar_one_or_none()
     if not dept:
         raise NotFoundException("Department not found")

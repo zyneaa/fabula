@@ -33,9 +33,7 @@ class User(Base):
     major: Mapped[str | None] = mapped_column(String(100))
     year: Mapped[int | None] = mapped_column(Integer)
     department_id: Mapped[int | None] = mapped_column(ForeignKey("departments.id"))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     department_rel: Mapped[Department | None] = relationship(
         "Department", back_populates="users", foreign_keys=[department_id]

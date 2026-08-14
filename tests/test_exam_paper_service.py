@@ -92,7 +92,9 @@ async def test_generate_exam_papers_success(mock_db, mock_material, mock_chunks)
 
     mock_db.execute = AsyncMock(side_effect=[mock_result_material, mock_result_chunks])
 
-    mock_llm_response = "# Exam Paper 1\n\n## Section A\n\n1. What is 2+2? (5 marks)\n\n## Answer Key\n\n1. 4"
+    mock_llm_response = (
+        "# Exam Paper 1\n\n## Section A\n\n1. What is 2+2? (5 marks)\n\n## Answer Key\n\n1. 4"
+    )
 
     with patch("app.services.exam_paper.generate_with_student_config") as mock_llm:
         mock_llm.return_value = mock_llm_response
@@ -119,9 +121,7 @@ async def test_generate_exam_papers_success(mock_db, mock_material, mock_chunks)
 
 
 @pytest.mark.asyncio
-async def test_generate_exam_papers_with_source_exam(
-    mock_db, mock_material, mock_chunks
-):
+async def test_generate_exam_papers_with_source_exam(mock_db, mock_material, mock_chunks):
     """Test exam papers generation with source exam style analysis."""
     # Mock course material queries
     mock_result_material = MagicMock()
@@ -140,9 +140,7 @@ async def test_generate_exam_papers_with_source_exam(
         ]
     )
 
-    mock_style_response = (
-        '{"question_types": ["mcq"], "key_characteristics": ["progressive"]}'
-    )
+    mock_style_response = '{"question_types": ["mcq"], "key_characteristics": ["progressive"]}'
     mock_paper_response = "# Exam Paper\n\n1. Question 1"
 
     with patch("app.services.exam_paper.generate_with_student_config") as mock_llm:

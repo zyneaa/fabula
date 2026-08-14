@@ -20,7 +20,9 @@ def mock_uni_info_entries():
     entry1.id = 1
     entry1.category = UniInfoCategory.course
     entry1.title = "Introduction to Computer Science"
-    entry1.content = "This course covers basic programming concepts, data structures, and algorithms."
+    entry1.content = (
+        "This course covers basic programming concepts, data structures, and algorithms."
+    )
     entries.append(entry1)
 
     entry2 = MagicMock(spec=UniInfo)
@@ -34,7 +36,9 @@ def mock_uni_info_entries():
     entry3.id = 3
     entry3.category = UniInfoCategory.event
     entry3.title = "Tech Talk: AI in Education"
-    entry3.content = "Join us for an exciting talk about artificial intelligence in education. Friday 3pm."
+    entry3.content = (
+        "Join us for an exciting talk about artificial intelligence in education. Friday 3pm."
+    )
     entries.append(entry3)
 
     return entries
@@ -61,9 +65,7 @@ async def test_search_uni_info_with_category_filter(mock_db, mock_uni_info_entri
     mock_result.scalars.return_value.all.return_value = [mock_uni_info_entries[1]]
     mock_db.execute = AsyncMock(return_value=mock_result)
 
-    results = await search_uni_info(
-        "schedule", category=UniInfoCategory.timetable, db=mock_db
-    )
+    results = await search_uni_info("schedule", category=UniInfoCategory.timetable, db=mock_db)
 
     assert len(results) == 1
     assert results[0].category == UniInfoCategory.timetable

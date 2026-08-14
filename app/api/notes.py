@@ -102,9 +102,7 @@ async def list_notes(
 ):
     """List all notes for the current user."""
     result = await db.execute(
-        select(Note)
-        .where(Note.user_id == current_user.id)
-        .order_by(Note.created_at.desc())
+        select(Note).where(Note.user_id == current_user.id).order_by(Note.created_at.desc())
     )
     notes = result.scalars().all()
 
@@ -112,9 +110,7 @@ async def list_notes(
         {
             "id": note.id,
             "material_id": note.material_id,
-            "content": note.content[:200] + "..."
-            if len(note.content) > 200
-            else note.content,
+            "content": note.content[:200] + "..." if len(note.content) > 200 else note.content,
             "created_at": note.created_at.isoformat(),
         }
         for note in notes

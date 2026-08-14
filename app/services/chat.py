@@ -75,7 +75,7 @@ async def generate_conversation_title(
         conversation.title = title
         await db.commit()
         return title
-    except Exception:
+    except Exception:  # noqa: BLE001 - return None on error
         return None
 
 
@@ -162,9 +162,7 @@ async def get_conversation_context(
         for material in materials:
             # Get chunks for this material
             chunks_result = await db.execute(
-                select(Chunk)
-                .where(Chunk.material_id == material.id)
-                .order_by(Chunk.chunk_index)
+                select(Chunk).where(Chunk.material_id == material.id).order_by(Chunk.chunk_index)
             )
             chunks = chunks_result.scalars().all()
 
@@ -199,9 +197,7 @@ async def get_conversation_context(
                 if uni_info_entries:
                     context_parts.append("\n\n=== UNIVERSITY INFORMATION ===")
                     for entry in uni_info_entries:
-                        context_parts.append(
-                            f"\n[{entry.category.value.upper()}] {entry.title}"
-                        )
+                        context_parts.append(f"\n[{entry.category.value.upper()}] {entry.title}")
                         context_parts.append(entry.content)
 
     if not context_parts:
@@ -224,7 +220,7 @@ async def _classify_uni_query(query: str, user_id: int, db: AsyncSession) -> boo
             [{"role": "user", "content": prompt}], user_id, db
         )
         return result.strip().lower().startswith("yes")
-    except Exception:
+    except Exception:  # noqa: BLE001 - return False on error
         return False
 
 
@@ -250,7 +246,7 @@ async def process_student_query(
             history.append({"role": msg.role.value, "content": msg.content})
 
     # Add user message
-    user_message = await add_message(
+    _ = await add_message(
         conversation_id=conversation_id,
         role=MessageRole.user,
         content=query,

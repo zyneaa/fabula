@@ -127,9 +127,7 @@ async def list_configs(
     if user.role == UserRole.admin:
         result = await db.execute(select(LLMConfig))
     else:
-        result = await db.execute(
-            select(LLMConfig).where(LLMConfig.teacher_id == user.id)
-        )
+        result = await db.execute(select(LLMConfig).where(LLMConfig.teacher_id == user.id))
     configs = result.scalars().all()
     return [_config_response(c) for c in configs]
 
@@ -261,7 +259,7 @@ async def get_active_config(teacher_id: int, db: AsyncSession) -> LLMConfig | No
         select(LLMConfig)
         .where(
             LLMConfig.teacher_id == teacher_id,
-            LLMConfig.is_active == True,
+            LLMConfig.is_active,
         )
         .order_by(LLMConfig.created_at.desc())
     )
@@ -275,9 +273,7 @@ async def assign_config_to_student(
     user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
 ):
     if user.role == UserRole.admin:
-        config_result = await db.execute(
-            select(LLMConfig).where(LLMConfig.id == req.config_id)
-        )
+        config_result = await db.execute(select(LLMConfig).where(LLMConfig.id == req.config_id))
     else:
         config_result = await db.execute(
             select(LLMConfig).where(
@@ -396,15 +392,13 @@ async def remove_config_assignment(
     await db.commit()
 
 
-async def get_student_active_config(
-    student_id: int, db: AsyncSession
-) -> LLMConfig | None:
+async def get_student_active_config(student_id: int, db: AsyncSession) -> LLMConfig | None:
     result = await db.execute(
         select(LLMConfig)
         .join(StudentLLMConfig, StudentLLMConfig.config_id == LLMConfig.id)
         .where(
             StudentLLMConfig.student_id == student_id,
-            LLMConfig.is_active == True,
+            LLMConfig.is_active,
         )
         .order_by(StudentLLMConfig.assigned_at.desc())
     )

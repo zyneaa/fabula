@@ -35,17 +35,13 @@ async def generate_quiz(
     all_chunks = []
     for material in materials:
         result = await db.execute(
-            select(Chunk)
-            .where(Chunk.material_id == material.id)
-            .order_by(Chunk.chunk_index)
+            select(Chunk).where(Chunk.material_id == material.id).order_by(Chunk.chunk_index)
         )
         chunks = result.scalars().all()
         all_chunks.extend(chunks)
 
     if not all_chunks:
-        raise ValueError(
-            f"No chunks found for materials in conversation {conversation_id}"
-        )
+        raise ValueError(f"No chunks found for materials in conversation {conversation_id}")
 
     # Combine chunks into content
     content = "\n\n".join([chunk.text for chunk in all_chunks])
@@ -99,7 +95,7 @@ Ensure the JSON is valid and properly formatted.""",
             quiz_data = json.loads(response)
     except json.JSONDecodeError as e:
         logger.error("Failed to parse quiz JSON", error=str(e), response=response)
-        raise ValueError(f"Failed to parse quiz response: {e!s}")
+        raise ValueError(f"Failed to parse quiz response: {e!s}") from e
 
     # Save to database (quiz is tied to conversation, not individual material)
     quiz = Quiz(

@@ -11,9 +11,7 @@ from app.services.llm import generate_with_student_config
 logger = structlog.get_logger()
 
 
-async def analyze_exam_style(
-    exam_material_id: int, teacher_id: int, db: AsyncSession
-) -> dict:
+async def analyze_exam_style(exam_material_id: int, teacher_id: int, db: AsyncSession) -> dict:
     """Analyze a previous exam paper to extract its style profile."""
 
     # Fetch exam material
@@ -24,9 +22,7 @@ async def analyze_exam_style(
 
     # Fetch chunks
     result = await db.execute(
-        select(Chunk)
-        .where(Chunk.material_id == exam_material_id)
-        .order_by(Chunk.chunk_index)
+        select(Chunk).where(Chunk.material_id == exam_material_id).order_by(Chunk.chunk_index)
     )
     chunks = result.scalars().all()
 
@@ -71,7 +67,7 @@ async def analyze_exam_style(
             style_profile = json.loads(response)
     except json.JSONDecodeError as e:
         logger.error("Failed to parse style profile JSON", error=str(e))
-        raise ValueError(f"Failed to parse style profile: {e!s}")
+        raise ValueError(f"Failed to parse style profile: {e!s}") from e
 
     return style_profile
 
@@ -94,9 +90,7 @@ async def generate_exam_papers(
 
     # Fetch course chunks
     result = await db.execute(
-        select(Chunk)
-        .where(Chunk.material_id == course_material_id)
-        .order_by(Chunk.chunk_index)
+        select(Chunk).where(Chunk.material_id == course_material_id).order_by(Chunk.chunk_index)
     )
     course_chunks = result.scalars().all()
 
@@ -201,12 +195,12 @@ async def generate_questions_from_materials(
 
     style_instruction = ""
     if source_exam_id:
-        result = await db.execute(
-            select(ExamPaper).where(ExamPaper.id == source_exam_id)
-        )
+        result = await db.execute(select(ExamPaper).where(ExamPaper.id == source_exam_id))
         source = result.scalar_one_or_none()
         if source:
-            style_instruction = f"\nUse this example exam as style reference:\n\n{source.content[:2000]}\n"
+            style_instruction = (
+                f"\nUse this example exam as style reference:\n\n{source.content[:2000]}\n"
+            )
 
     messages = [
         {

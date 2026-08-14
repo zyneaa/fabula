@@ -1,5 +1,5 @@
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,9 +51,8 @@ async def generate_exam_papers_background(
             )
             logger.info("Exam papers generation completed", course_id=course_id)
         except Exception as e:
-            logger.error(
-                "Exam papers generation failed", error=str(e), course_id=course_id
-            )
+            logger.error("Exam papers generation failed", error=str(e), course_id=course_id)
+            raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.post("/generate", status_code=202)
@@ -116,9 +115,7 @@ async def get_exam_papers_by_course(
     """Get all exam papers for a specific course."""
     result = await db.execute(
         select(ExamPaper)
-        .where(
-            ExamPaper.course_id == course_id, ExamPaper.teacher_id == current_user.id
-        )
+        .where(ExamPaper.course_id == course_id, ExamPaper.teacher_id == current_user.id)
         .order_by(ExamPaper.paper_number)
     )
     papers = result.scalars().all()
@@ -128,9 +125,7 @@ async def get_exam_papers_by_course(
             "id": paper.id,
             "course_id": paper.course_id,
             "paper_number": paper.paper_number,
-            "content": paper.content[:300] + "..."
-            if len(paper.content) > 300
-            else paper.content,
+            "content": paper.content[:300] + "..." if len(paper.content) > 300 else paper.content,
             "style_profile": paper.style_profile,
             "created_at": paper.created_at.isoformat(),
         }
@@ -146,9 +141,7 @@ async def get_exam_paper(
 ):
     """Get a specific exam paper by ID."""
     result = await db.execute(
-        select(ExamPaper).where(
-            ExamPaper.id == paper_id, ExamPaper.teacher_id == current_user.id
-        )
+        select(ExamPaper).where(ExamPaper.id == paper_id, ExamPaper.teacher_id == current_user.id)
     )
     paper = result.scalar_one_or_none()
     if not paper:
@@ -182,9 +175,7 @@ async def list_exam_papers(
             "id": paper.id,
             "course_id": paper.course_id,
             "paper_number": paper.paper_number,
-            "content": paper.content[:300] + "..."
-            if len(paper.content) > 300
-            else paper.content,
+            "content": paper.content[:300] + "..." if len(paper.content) > 300 else paper.content,
             "created_at": paper.created_at.isoformat(),
         }
         for paper in papers
@@ -199,9 +190,7 @@ async def delete_exam_paper(
 ):
     """Delete an exam paper."""
     result = await db.execute(
-        select(ExamPaper).where(
-            ExamPaper.id == paper_id, ExamPaper.teacher_id == current_user.id
-        )
+        select(ExamPaper).where(ExamPaper.id == paper_id, ExamPaper.teacher_id == current_user.id)
     )
     paper = result.scalar_one_or_none()
     if not paper:

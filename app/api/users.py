@@ -51,13 +51,11 @@ def check_can_create_user(current_user: User, target_role: UserRole):
     if current_user.role == UserRole.student:
         raise ForbiddenException("Students cannot create users")
 
-    if current_user.role == UserRole.teacher:
-        if target_role != UserRole.student:
-            raise ForbiddenException("Teachers can only create students")
+    if current_user.role == UserRole.teacher and target_role != UserRole.student:
+        raise ForbiddenException("Teachers can only create students")
 
-    if current_user.role == UserRole.admin:
-        if target_role == UserRole.admin:
-            pass
+    if current_user.role == UserRole.admin and target_role == UserRole.admin:
+        pass
 
 
 @router.post("", response_model=UserResponse, status_code=201)
@@ -126,9 +124,7 @@ async def list_students(
     current_user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
 ):
     result = await db.execute(
-        select(User)
-        .where(User.role == UserRole.student)
-        .order_by(User.created_at.desc())
+        select(User).where(User.role == UserRole.student).order_by(User.created_at.desc())
     )
     students = result.scalars().all()
     return students

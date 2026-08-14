@@ -102,9 +102,7 @@ async def list_quizzes(
 ):
     """List all quizzes for the current user."""
     result = await db.execute(
-        select(Quiz)
-        .where(Quiz.user_id == current_user.id)
-        .order_by(Quiz.created_at.desc())
+        select(Quiz).where(Quiz.user_id == current_user.id).order_by(Quiz.created_at.desc())
     )
     quizzes = result.scalars().all()
 

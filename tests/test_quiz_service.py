@@ -23,13 +23,13 @@ def mock_material():
 @pytest.fixture
 def mock_chunks():
     chunk1 = MagicMock(spec=Chunk)
-    chunk1.text = "Photosynthesis is the process by which plants convert light energy into chemical energy."
+    chunk1.text = (
+        "Photosynthesis is the process by which plants convert light energy into chemical energy."
+    )
     chunk1.chunk_index = 0
 
     chunk2 = MagicMock(spec=Chunk)
-    chunk2.text = (
-        "The main product of photosynthesis is glucose, which plants use for energy."
-    )
+    chunk2.text = "The main product of photosynthesis is glucose, which plants use for energy."
     chunk2.chunk_index = 1
 
     return [chunk1, chunk2]

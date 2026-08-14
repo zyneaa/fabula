@@ -76,8 +76,6 @@ async def get_relevant_context(
 
     context_parts = []
     for entry in entries:
-        context_parts.append(
-            f"[{entry.category.value.upper()}] {entry.title}\n{entry.content}"
-        )
+        context_parts.append(f"[{entry.category.value.upper()}] {entry.title}\n{entry.content}")
 
     return "\n\n---\n\n".join(context_parts)

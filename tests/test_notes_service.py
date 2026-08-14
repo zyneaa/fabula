@@ -94,7 +94,5 @@ async def test_generate_notes_no_chunks(mock_db, mock_material):
 
     mock_db.execute = AsyncMock(side_effect=[mock_result_materials, mock_result_chunks])
 
-    with pytest.raises(
-        ValueError, match="No chunks found for materials in conversation"
-    ):
+    with pytest.raises(ValueError, match="No chunks found for materials in conversation"):
         await generate_notes(1, 1, mock_db)

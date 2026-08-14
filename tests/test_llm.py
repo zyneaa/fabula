@@ -20,9 +20,7 @@ async def test_openrouter_complete():
     mock_response.json.return_value = {"choices": [{"message": {"content": "Hello!"}}]}
     mock_response.raise_for_status = MagicMock()
 
-    with patch.object(
-        provider.client, "post", new=AsyncMock(return_value=mock_response)
-    ):
+    with patch.object(provider.client, "post", new=AsyncMock(return_value=mock_response)):
         result = await provider.complete(
             messages=[{"role": "user", "content": "Hi"}], model="openai/gpt-4o"
         )

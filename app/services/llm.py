@@ -44,9 +44,7 @@ class OpenRouterProvider:
 
         if response.status_code >= 400:
             body = response.text
-            logger.error(
-                "OpenRouter error", status=response.status_code, body=body, model=model
-            )
+            logger.error("OpenRouter error", status=response.status_code, body=body, model=model)
             response.raise_for_status()
 
         data = response.json()
@@ -76,7 +74,7 @@ async def generate_with_student_config(
         if config.max_tokens:
             kwargs["max_tokens"] = config.max_tokens
         if config.system_prompt:
-            messages = [{"role": "system", "content": config.system_prompt}] + messages
+            messages = [{"role": "system", "content": config.system_prompt}, *messages]
         if config.temperature is not None:
             kwargs["temperature"] = config.temperature
         if config.top_p is not None:
@@ -106,9 +104,7 @@ async def generate_with_student_config_stream(
     messages: list[dict], student_id: int, db: AsyncSession, **kwargs
 ) -> AsyncIterator[str]:
     # First get full response from LLM (non-streaming for reliability)
-    full_response = await generate_with_student_config(
-        messages, student_id, db, **kwargs
-    )
+    full_response = await generate_with_student_config(messages, student_id, db, **kwargs)
 
     # Then stream it character by character to frontend
     for char in full_response:

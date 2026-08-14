@@ -55,7 +55,7 @@ async def test_create_conversation(mock_db, mock_conversation):
     mock_db.commit = AsyncMock()
     mock_db.refresh = AsyncMock()
 
-    result = await create_conversation(user_id=1, db=mock_db)
+    _ = await create_conversation(user_id=1, db=mock_db)
 
     mock_db.add.assert_called_once()
     mock_db.commit.assert_called_once()
@@ -107,7 +107,7 @@ async def test_add_message(mock_db):
     mock_db.commit = AsyncMock()
     mock_db.refresh = AsyncMock()
 
-    result = await add_message(
+    _ = await add_message(
         conversation_id=1,
         role=MessageRole.user,
         content="Test message",
@@ -150,12 +150,8 @@ async def test_process_student_query(mock_db, mock_conversation):
             "app.services.chat.get_conversation_messages", new_callable=AsyncMock
         ) as mock_get_msgs,
         patch("app.services.chat.add_message", new_callable=AsyncMock) as mock_add_msg,
-        patch(
-            "app.services.chat.get_conversation_context", new_callable=AsyncMock
-        ) as mock_context,
-        patch(
-            "app.services.chat.generate_with_student_config", new_callable=AsyncMock
-        ) as mock_llm,
+        patch("app.services.chat.get_conversation_context", new_callable=AsyncMock) as mock_context,
+        patch("app.services.chat.generate_with_student_config", new_callable=AsyncMock) as mock_llm,
     ):
         mock_get_msgs.return_value = []
         mock_add_msg.return_value = mock_msg

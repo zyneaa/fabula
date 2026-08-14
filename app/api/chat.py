@@ -143,9 +143,7 @@ async def rename_conversation_endpoint(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    conversation = await rename_conversation(
-        conversation_id, current_user.id, request.title, db
-    )
+    conversation = await rename_conversation(conversation_id, current_user.id, request.title, db)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return {
@@ -173,7 +171,5 @@ async def generate_title(
 ):
     title = await generate_conversation_title(conversation_id, current_user.id, db)
     if title is None:
-        raise HTTPException(
-            status_code=404, detail="Conversation not found or no messages"
-        )
+        raise HTTPException(status_code=404, detail="Conversation not found or no messages")
     return {"title": title}
