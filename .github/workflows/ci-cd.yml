@@ -120,12 +120,13 @@ jobs:
           fi
 
       - name: Upload scan report
-        if: always()
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: security-scan-report
           path: fabula_scanner/reports/
           retention-days: 30
+          if-no-files-found: warn
 
   # Build and Push Docker Images Job
   build-and-push-images:
@@ -307,12 +308,12 @@ jobs:
           echo "Please check the logs for details."
           exit 1
 
-  # Security Scan Summary Job (runs even if other jobs fail)
+  # Security Scan Summary Job (runs after security scan completes)
   security-summary:
     name: Security Scan Summary
     runs-on: ubuntu-latest
     needs: [security-scan, build-and-test]
-    if: always()
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     
     steps:
       - name: Download scan report
@@ -322,6 +323,7 @@ jobs:
           path: fabula_scanner/reports/
 
       - name: Generate summary
+        if: always() && hashFiles('fabula_scanner/reports/ci-scan.json') != ''
         run: |
           cd fabula_scanner/reports
           if [ -f ci-scan.json ]; then
