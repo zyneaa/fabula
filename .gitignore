@@ -59,3 +59,5 @@ TELEGRAM_CHAT_ID
 .ruff_cache/
 
 /hurl/token.json
+
+/hurl/token.json
