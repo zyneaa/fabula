@@ -1,0 +1,279 @@
+name: Docker Hub Image Cleanup
+
+on:
+  schedule:
+    # Every Sunday at 03:17 UTC.
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      retention_count:
+        description: "Number of newest backend/frontend SHA tags to retain"
+        required: true
+        default: "10"
+        type: string
+      dry_run:
+        description: "List deletion candidates without deleting tags"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dockerhub-image-cleanup
+  cancel-in-progress: false
+
+env:
+  DOCKERHUB_NAMESPACE: fabulalearning
+  DOCKERHUB_REPOSITORY: fabula
+  DEFAULT_RETENTION_COUNT: "10"
+
+jobs:
+  cleanup:
+    name: Retain Recent Fabula Images
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Validate cleanup inputs
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_CLEANUP_TOKEN: ${{ secrets.DOCKERHUB_CLEANUP_TOKEN }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test "$DOCKERHUB_USERNAME" = "fabulalearning" || {
+            echo "DOCKERHUB_USERNAME must be fabulalearning"
+            exit 1
+          }
+          test -n "$DOCKERHUB_CLEANUP_TOKEN" || {
+            echo "DOCKERHUB_CLEANUP_TOKEN is not configured"
+            exit 1
+          }
+          test -n "$VPS_HOST" || { echo "VPS_HOST is not configured"; exit 1; }
+          test -n "$VPS_USER" || { echo "VPS_USER is not configured"; exit 1; }
+          test -n "$VPS_SSH_KEY" || { echo "VPS_SSH_KEY is not configured"; exit 1; }
+
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            retention="$DEFAULT_RETENTION_COUNT"
+          else
+            retention="${{ inputs.retention_count }}"
+          fi
+
+          case "$retention" in
+            ''|*[!0-9]*)
+              echo "retention_count must be a positive integer"
+              exit 1
+              ;;
+          esac
+
+          if [ "$retention" -lt 1 ] || [ "$retention" -gt 100 ]; then
+            echo "retention_count must be between 1 and 100"
+            exit 1
+          fi
+
+      - name: Configure SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          if [ -n "${VPS_KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          fi
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Identify currently deployed Fabula image tags
+        id: deployed
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          set -euo pipefail
+
+          backend_image="$(ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            "docker ps -q --filter label=com.docker.compose.project=fabula --filter label=com.docker.compose.service=backend | head -n 1 | xargs -r docker inspect --format '{{.Config.Image}}'")"
+          frontend_image="$(ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            "docker ps -q --filter label=com.docker.compose.project=fabula --filter label=com.docker.compose.service=frontend | head -n 1 | xargs -r docker inspect --format '{{.Config.Image}}'")"
+
+          case "$backend_image" in
+            fabulalearning/fabula:backend-*) ;;
+            *)
+              echo "Could not identify the currently deployed backend image; refusing to delete tags."
+              exit 1
+              ;;
+          esac
+
+          case "$frontend_image" in
+            fabulalearning/fabula:frontend-*) ;;
+            *)
+              echo "Could not identify the currently deployed frontend image; refusing to delete tags."
+              exit 1
+              ;;
+          esac
+
+          backend_tag="${backend_image##*:}"
+          frontend_tag="${frontend_image##*:}"
+          printf 'backend_tag=%s\n' "$backend_tag" >> "$GITHUB_OUTPUT"
+          printf 'frontend_tag=%s\n' "$frontend_tag" >> "$GITHUB_OUTPUT"
+          echo "Protected deployed backend tag: $backend_tag"
+          echo "Protected deployed frontend tag: $frontend_tag"
+
+      - name: List and safely remove old Docker Hub tags
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_CLEANUP_TOKEN: ${{ secrets.DOCKERHUB_CLEANUP_TOKEN }}
+          RETENTION_COUNT: ${{ github.event_name == 'schedule' && '10' || inputs.retention_count }}
+          DEPLOYED_BACKEND_TAG: ${{ steps.deployed.outputs.backend_tag }}
+          DEPLOYED_FRONTEND_TAG: ${{ steps.deployed.outputs.frontend_tag }}
+        run: |
+          set -euo pipefail
+
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            DRY_RUN=false
+          else
+            DRY_RUN="${{ inputs.dry_run }}"
+          fi
+          export DRY_RUN
+
+          cat > cleanup_dockerhub.py <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          import time
+          from urllib.error import HTTPError, URLError
+          from urllib.parse import quote, urljoin
+          from urllib.request import Request, urlopen
+
+          API_BASE = "https://hub.docker.com"
+          namespace = os.environ["DOCKERHUB_NAMESPACE"]
+          repository = os.environ["DOCKERHUB_REPOSITORY"]
+          username = os.environ["DOCKERHUB_USERNAME"]
+          secret = os.environ["DOCKERHUB_CLEANUP_TOKEN"]
+          retention = int(os.environ["RETENTION_COUNT"])
+          dry_run = os.environ.get("DRY_RUN", "true").lower() == "true"
+          deployed = {
+              os.environ["DEPLOYED_BACKEND_TAG"],
+              os.environ["DEPLOYED_FRONTEND_TAG"],
+          }
+
+          sha_patterns = {
+              "backend": re.compile(r"^backend-[0-9a-f]{7,64}$"),
+              "frontend": re.compile(r"^frontend-[0-9a-f]{7,64}$"),
+          }
+
+          def request(method, url, token=None, body=None, retries=3):
+              payload = None
+              headers = {"Accept": "application/json"}
+              if body is not None:
+                  payload = json.dumps(body).encode("utf-8")
+                  headers["Content-Type"] = "application/json"
+              if token:
+                  headers["Authorization"] = f"Bearer {token}"
+
+              for attempt in range(retries):
+                  try:
+                      req = Request(url, data=payload, headers=headers, method=method)
+                      with urlopen(req, timeout=30) as response:
+                          raw = response.read()
+                          return response.status, json.loads(raw) if raw else {}
+                  except HTTPError as exc:
+                      if exc.code == 429 and attempt + 1 < retries:
+                          retry_after = int(exc.headers.get("Retry-After", "10"))
+                          time.sleep(min(retry_after, 60))
+                          continue
+                      detail = exc.read().decode("utf-8", errors="replace")[:500]
+                      raise RuntimeError(f"Docker Hub API {method} {url} returned {exc.code}: {detail}")
+                  except URLError as exc:
+                      if attempt + 1 == retries:
+                          raise RuntimeError(f"Docker Hub API request failed: {exc}")
+                      time.sleep(2 ** attempt)
+              raise RuntimeError(f"Docker Hub API request failed after {retries} attempts")
+
+          auth_status, auth_data = request(
+              "POST",
+              f"{API_BASE}/v2/auth/token",
+              body={"identifier": username, "secret": secret},
+          )
+          access_token = auth_data.get("access_token")
+          if auth_status != 200 or not access_token:
+              raise RuntimeError("Docker Hub authentication failed")
+
+          tags = []
+          next_url = (
+              f"{API_BASE}/v2/namespaces/{quote(namespace, safe='')}/repositories/"
+              f"{quote(repository, safe='')}/tags?page_size=100&page=1"
+          )
+          while next_url:
+              status, page = request("GET", next_url, token=access_token)
+              if status != 200:
+                  raise RuntimeError("Docker Hub tag listing failed")
+              tags.extend(page.get("results", []))
+              next_url = page.get("next")
+              if next_url and next_url.startswith("/"):
+                  next_url = urljoin(API_BASE, next_url)
+
+          if not tags:
+              raise RuntimeError("No tags were returned; refusing to delete anything")
+
+          protected = {"backend-latest", "frontend-latest"} | deployed
+          candidates = []
+          retained = set(protected)
+
+          for prefix, pattern in sha_patterns.items():
+              matching = [
+                  tag for tag in tags
+                  if pattern.fullmatch(tag.get("name", ""))
+              ]
+              matching.sort(
+                  key=lambda tag: tag.get("last_updated") or tag.get("last_pushed") or "",
+                  reverse=True,
+              )
+              keep = matching[:retention]
+              retained.update(tag.get("name") for tag in keep)
+              for tag in matching[retention:]:
+                  name = tag.get("name")
+                  if name not in protected:
+                      candidates.append(name)
+
+          print(f"Repository: {namespace}/{repository}")
+          print(f"Total tags: {len(tags)}")
+          print(f"Retention per image prefix: {retention}")
+          print(f"Protected tags: {', '.join(sorted(protected))}")
+          print(f"Retained matching tags: {len(retained)}")
+          print(f"Deletion candidates: {len(candidates)}")
+
+          if not candidates:
+              print("Nothing to delete.")
+              sys.exit(0)
+
+          for name in candidates:
+              print(f"{'DRY-RUN would delete' if dry_run else 'Deleting'}: {name}")
+              if not dry_run:
+                  delete_url = (
+                      f"{API_BASE}/v2/namespaces/{quote(namespace, safe='')}/repositories/"
+                      f"{quote(repository, safe='')}/tags/{quote(name, safe='')}"
+                  )
+                  status, _ = request("DELETE", delete_url, token=access_token)
+                  if status not in (200, 202, 204):
+                      raise RuntimeError(f"Unexpected delete status for {name}: {status}")
+
+          print("Cleanup completed successfully.")
+          PY
+
+          export DOCKERHUB_NAMESPACE DOCKERHUB_REPOSITORY
+          python3 cleanup_dockerhub.py
