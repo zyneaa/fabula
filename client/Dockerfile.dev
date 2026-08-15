@@ -2,17 +2,15 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Make the application directory writable by the non-root Node user
+RUN chown -R node:node /app
+USER node
 
-# Install dependencies
+COPY --chown=node:node package*.json ./
 RUN npm ci
 
-# Copy source code
-COPY . .
+COPY --chown=node:node . .
 
-# Expose Vite dev server port
 EXPOSE 5173
 
-# Run Vite dev server
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

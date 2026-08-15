@@ -60,7 +60,7 @@ services:
     image: "${DOCKERHUB_IMAGE_NAME:-malangaungja/fabula}:${FABULA_FRONTEND_TAG:-frontend-latest}"
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3005:80"
+      - "127.0.0.1:3005:8080"
     depends_on:
       backend:
         condition: service_healthy
@@ -68,7 +68,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "wget -q -O - http://localhost/ >/dev/null || exit 1"
+          "wget -q -O - http://localhost:8080/ >/dev/null || exit 1"
         ]
       interval: 30s
       timeout: 10s
