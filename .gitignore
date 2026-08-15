@@ -57,3 +57,5 @@ fabula_scanner/config/*.env
 TELEGRAM_BOT_TOKEN
 TELEGRAM_CHAT_ID
 .ruff_cache/
+
+/hurl/token.json
