@@ -2,7 +2,7 @@ import requests
 from concurrent.futures import ThreadPoolExecutor
 
 from core.base import ScannerModule
-from core.utils import safe_join
+from core.utils import looks_like_spa_fallback, make_request, safe_join
 
 
 class DirBruteforce(ScannerModule):
@@ -54,6 +54,7 @@ class DirBruteforce(ScannerModule):
                 "/.git/config",
             ]
 
+        root_response = make_request(self.target_url, allow_redirects=False)
         findings = []
 
         def check(path):
@@ -65,19 +66,18 @@ class DirBruteforce(ScannerModule):
                     verify=False,
                     allow_redirects=False,
                 )
-                # A 403/401 means the server blocked the request. It must not
-                # be reported as an exposed sensitive file.
                 if response.status_code in {200, 401, 403}:
-                    findings.append(
-                        (path, response.status_code, response.text.lower())
-                    )
+                    findings.append((path, response.status_code, response.text.lower(), response))
             except requests.RequestException:
                 pass
 
         with ThreadPoolExecutor(max_workers=20) as executor:
             list(executor.map(check, paths))
 
-        for path, status_code, body in findings:
+        for path, status_code, body, response in findings:
+            if looks_like_spa_fallback(response, root_response):
+                continue
+
             if path in self.SENSITIVE_PATHS:
                 if status_code in {401, 403}:
                     self.add_finding(
