@@ -340,7 +340,20 @@ jobs:
             local reason="$1"
             local report_base="$2"
             enable_maintenance
-            send_message "FABULA SECURITY ALERT\n\nStatus: MAINTENANCE MODE ENABLED\nTarget: ${TARGET_URL}\nReason: ${reason}\nBackend tag: ${BACKEND_TAG}\nFrontend tag: ${FRONTEND_TAG}\n\nFull JSON and HTML reports are attached when available."
+            local alert_message
+            alert_message="$(cat <<EOF
+          FABULA SECURITY ALERT
+
+          Status: MAINTENANCE MODE ENABLED
+          Target: ${TARGET_URL}
+          Reason: ${reason}
+          Backend tag: ${BACKEND_TAG}
+          Frontend tag: ${FRONTEND_TAG}
+
+          Full JSON and HTML reports are attached when available.
+          EOF
+          )"
+            send_message "$alert_message"
             send_document "${report_base}.json" "Fabula security JSON report: ${reason}"
             send_document "${report_base}.html" "Fabula security HTML report: ${reason}"
           }
@@ -388,16 +401,29 @@ jobs:
           low="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("summary", {}).get("low", 0))' < "${report_base}.json")"
           info="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("summary", {}).get("info", 0))' < "${report_base}.json")"
 
-          summary="Fabula security scan\n\nTarget: ${TARGET_URL}\nBackend: ${BACKEND_TAG}\nFrontend: ${FRONTEND_TAG}\n\nCRITICAL: ${critical}\nHIGH: ${high}\nMEDIUM: ${medium}\nLOW: ${low}\nINFO: ${info}"
+          summary="$(cat <<EOF
+          Fabula security scan
+
+          Target: ${TARGET_URL}
+          Backend: ${BACKEND_TAG}
+          Frontend: ${FRONTEND_TAG}
+
+          CRITICAL: ${critical}
+          HIGH: ${high}
+          MEDIUM: ${medium}
+          LOW: ${low}
+          INFO: ${info}
+          EOF
+          )"
 
           if [ "$scanner_rc" -ne 0 ] || [ "$critical" -gt 0 ] || [ "$high" -gt 0 ]; then
             report_failure "Critical/High findings or scanner failure" "$report_base"
-            send_message "$summary\n\nAction: MAINTENANCE MODE ENABLED"
+            send_message "$(printf '%s\n\n%s' "$summary" "Action: MAINTENANCE MODE ENABLED")"
             exit 1
           fi
 
           disable_maintenance
-          send_message "$summary\n\nAction: Site remains online. No Critical or High findings detected."
+          send_message "$(printf '%s\n\n%s' "$summary" "Action: Site remains online. No Critical or High findings detected.")"
           echo "Security scan passed."
           REMOTE
           chmod +x deploy-and-scan.sh
