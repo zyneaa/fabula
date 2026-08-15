@@ -23,9 +23,15 @@ class DockerComposeCheck(ScannerModule):
     CREDENTIAL_PATTERNS = (
         (r"POSTGRES_PASSWORD\s*[:=]\s*[\"']?([^\"'\s]+)", "PostgreSQL Password"),
         (r"MYSQL_ROOT_PASSWORD\s*[:=]\s*[\"']?([^\"'\s]+)", "MySQL Root Password"),
+        (r"MYSQL_PASSWORD\s*[:=]\s*[\"']?([^\"'\s]+)", "MySQL Password"),
+        (r"MARIADB_ROOT_PASSWORD\s*[:=]\s*[\"']?([^\"'\s]+)", "MariaDB Root Password"),
+        (r"MARIADB_PASSWORD\s*[:=]\s*[\"']?([^\"'\s]+)", "MariaDB Password"),
         (r"MONGO_INITDB_ROOT_PASSWORD\s*[:=]\s*[\"']?([^\"'\s]+)", "MongoDB Root Password"),
         (r"REDIS_PASSWORD\s*[:=]\s*[\"']?([^\"'\s]+)", "Redis Password"),
+        (r"WORDPRESS_DB_PASSWORD\s*[:=]\s*[\"']?([^\"'\s]+)", "WordPress Database Password"),
         (r"DB_PASSWORD\s*[:=]\s*[\"']?([^\"'\s]+)", "Database Password"),
+        (r"DB_PASS\s*[:=]\s*[\"']?([^\"'\s]+)", "Database Password"),
+        (r"DATABASE_PASSWORD\s*[:=]\s*[\"']?([^\"'\s]+)", "Database Password"),
         (r"JWT_SECRET\s*[:=]\s*[\"']?([^\"'\s]+)", "JWT Secret"),
         (r"AWS_ACCESS_KEY_ID\s*[:=]", "AWS Access Key"),
         (r"AWS_SECRET_ACCESS_KEY\s*[:=]", "AWS Secret Key"),
@@ -34,14 +40,21 @@ class DockerComposeCheck(ScannerModule):
     @staticmethod
     def _looks_like_compose(content):
         text = content.lower()
-        markers = (
-            "services:",
-            "postgres:",
-            "dockerfile:",
+        if "services:" not in text:
+            return False
+
+        service_markers = (
+            "image:",
+            "build:",
+            "environment:",
+            "ports:",
+            "volumes:",
             "depends_on:",
             "networks:",
+            "container_name:",
+            "restart:",
         )
-        return sum(marker in text for marker in markers) >= 2
+        return sum(marker in text for marker in service_markers) >= 2
 
     @staticmethod
     def _is_placeholder(value):
