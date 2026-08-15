@@ -21,7 +21,7 @@ services:
       - fabula-network
 
   backend:
-    image: "${DOCKERHUB_IMAGE_NAME:-malangaungja/fabula}:${FABULA_BACKEND_TAG:-backend-latest}"
+    image: "${DOCKERHUB_IMAGE_NAME:-fabulalearning/fabula}:${FABULA_BACKEND_TAG:-backend-latest}"
     restart: unless-stopped
     ports:
       - "127.0.0.1:8001:8000"
@@ -57,7 +57,7 @@ services:
       - fabula-network
 
   frontend:
-    image: "${DOCKERHUB_IMAGE_NAME:-malangaungja/fabula}:${FABULA_FRONTEND_TAG:-frontend-latest}"
+    image: "${DOCKERHUB_IMAGE_NAME:-fabulalearning/fabula}:${FABULA_FRONTEND_TAG:-frontend-latest}"
     restart: unless-stopped
     ports:
       - "127.0.0.1:3005:8080"

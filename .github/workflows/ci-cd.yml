@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  DOCKERHUB_IMAGE_NAME: malangaungja/fabula
+  DOCKERHUB_IMAGE_NAME: fabulalearning/fabula
   PYTHON_VERSION: "3.14"
   NODE_VERSION: "20"
 
@@ -283,7 +283,7 @@ jobs:
           test -x "$SCANNER_DIR/.venv/bin/python" || { echo "Scanner virtualenv is missing"; exit 1; }
           test -f "$SCANNER_DIR/.env" || { echo "Scanner .env is missing"; exit 1; }
 
-          export DOCKERHUB_IMAGE_NAME=malangaungja/fabula
+          export DOCKERHUB_IMAGE_NAME=fabulalearning/fabula
           export FABULA_BACKEND_TAG="$BACKEND_TAG"
           export FABULA_FRONTEND_TAG="$FRONTEND_TAG"
 
@@ -431,38 +431,14 @@ jobs:
           low="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("summary", {}).get("low", 0))' < "${report_base}.json")"
           info="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("summary", {}).get("info", 0))' < "${report_base}.json")"
 
-          summary="$(cat <<EOF
-          🟢 <b>FABULA SECURITY SCAN PASSED</b>
-
-          <b>Status:</b> ✅ SITE REMAINS ONLINE
-          <b>Target:</b> <code>${TARGET_URL}</code>
-
-          <b>Release</b>
-          • Backend: <code>${BACKEND_TAG}</code>
-          • Frontend: <code>${FRONTEND_TAG}</code>
-
-          <b>Severity summary</b>
-          🔴 Critical: ${critical}
-          🟠 High: ${high}
-          🟡 Medium: ${medium}
-          🔵 Low: ${low}
-          ℹ️ Info: ${info}
-
-          <b>Result:</b> No Critical or High findings detected.
-          <b>Action:</b> Deployment completed and maintenance mode is disabled.
-          EOF
-          )"
-
           if [ "$scanner_rc" -ne 0 ] || [ "$critical" -gt 0 ] || [ "$high" -gt 0 ]; then
             report_failure "Critical/High findings or scanner failure (scanner exit code ${scanner_rc})" "$report_base"
             exit 1
           fi
 
           disable_maintenance
-          send_message "$summary"
-          send_document "${report_base}.json" "Fabula JSON security report — scan passed"
-          send_document "${report_base}.html" "Fabula HTML security report — scan passed"
-          echo "Security scan passed."
+          echo "Security scan passed with no Critical or High findings."
+
           REMOTE
           chmod +x deploy-and-scan.sh
 
@@ -510,27 +486,6 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
             "$VPS_USER@$VPS_HOST" \
             "bash /var/www/fabula/deploy-and-scan.sh backend-${GITHUB_SHA} frontend-${GITHUB_SHA}"
-
-      - name: Collect VPS reports
-        if: always()
-        continue-on-error: true
-        env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-        run: |
-          mkdir -p vps-reports
-          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -r \
-            "$VPS_USER@$VPS_HOST:/var/www/fabula_scanner/reports/." \
-            vps-reports/
-
-      - name: Upload VPS reports to GitHub Actions
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fabula-vps-security-reports
-          path: vps-reports/
-          retention-days: 30
-          if-no-files-found: warn
 
   public-health-check:
     name: Check Public Fabula Health
