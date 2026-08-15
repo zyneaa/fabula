@@ -488,7 +488,8 @@ jobs:
           case "$TARGET_URL" in
             https://fabula.whitewolf2026.com) ;;
             *)
-              echo "TARGET_URL must be exactly https://fabula.whitewolf2026.com"
+              echo "TARGET_URL is invalid. It must be an HTTPS origin without a path."
+              echo "Normalized TARGET_URL length: ${#TARGET_URL}"
               exit 1
               ;;
           esac
@@ -497,15 +498,15 @@ jobs:
           echo "Checking public Fabula API health endpoint: $HEALTH_URL"
 
           for attempt in {1..12}; do
-            if BODY="$(curl -4 --fail --show-error --silent --location \\
-                --connect-timeout 10 \\
-                --max-time 30 \\
-                --retry 2 \\
-                --retry-delay 5 \\
-                --retry-all-errors \\
-                -A 'Fabula-CI-Healthcheck/1.0' \\
+            if BODY="$(curl -4 --fail --show-error --silent --location \
+                --connect-timeout 10 \
+                --max-time 30 \
+                --retry 2 \
+                --retry-delay 5 \
+                --retry-all-errors \
+                -A 'Fabula-CI-Healthcheck/1.0' \
                 "$HEALTH_URL")"; then
-              if printf '%s' "$BODY" | python -c \\
+              if printf '%s' "$BODY" | python -c \
                   'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get("status") == "ok" else 1)'; then
                 echo "Public health check passed: HTTP 200 and status=ok"
                 exit 0
@@ -517,11 +518,11 @@ jobs:
           done
 
           echo "Public health check failed. Diagnostic response:"
-          curl -4 --show-error --silent --location \\
-            --connect-timeout 10 \\
-            --max-time 30 \\
-            -A 'Fabula-CI-Healthcheck/1.0' \\
-            -D - "$HEALTH_URL" \\
+          curl -4 --show-error --silent --location \
+            --connect-timeout 10 \
+            --max-time 30 \
+            -A 'Fabula-CI-Healthcheck/1.0' \
+            -D - "$HEALTH_URL" \
             -o /tmp/fabula-health-body || true
           echo '--- response body ---'
           head -c 1000 /tmp/fabula-health-body 2>/dev/null || true
