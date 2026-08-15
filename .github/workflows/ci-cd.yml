@@ -84,7 +84,6 @@ jobs:
 
       - name: Scan source, dependencies, and secrets
         id: trivy-fs
-        continue-on-error: true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
@@ -94,11 +93,10 @@ jobs:
           output: trivy-fs-results.sarif
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          exit-code: "1"
+          exit-code: "0"
 
       - name: Scan Docker and Compose configuration
         id: trivy-config
-        continue-on-error: true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
@@ -106,7 +104,7 @@ jobs:
           format: sarif
           output: trivy-config-results.sarif
           severity: HIGH,CRITICAL
-          exit-code: "1"
+          exit-code: "0"
 
       - name: Upload Trivy reports
         if: always()
@@ -123,15 +121,52 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          if [ "${{ steps.trivy-fs.outcome }}" != "success" ]; then
-            echo "Trivy source, dependency, or secret scan failed."
+
+          for report in trivy-fs-results.sarif trivy-config-results.sarif; do
+            if [ ! -f "$report" ]; then
+              echo "Missing Trivy report: $report"
+              exit 1
+            fi
+          done
+
+          HIGH_OR_CRITICAL=0
+
+          for report in trivy-fs-results.sarif trivy-config-results.sarif; do
+            count="$(python - "$report" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              data = json.load(handle)
+
+          count = 0
+          for run in data.get("runs", []):
+              rules = {
+                  rule.get("id"): rule
+                  for rule in run.get("tool", {}).get("driver", {}).get("rules", [])
+              }
+              for result in run.get("results", []):
+                  rule = rules.get(result.get("ruleId"), {})
+                  tags = {
+                      str(tag).upper()
+                      for tag in rule.get("properties", {}).get("tags", [])
+                  }
+                  if "HIGH" in tags or "CRITICAL" in tags:
+                      count += 1
+
+          print(count)
+          PY
+            )"
+            echo "$report: $count HIGH/CRITICAL findings"
+            HIGH_OR_CRITICAL=$((HIGH_OR_CRITICAL + count))
+          done
+
+          if [ "$HIGH_OR_CRITICAL" -gt 0 ]; then
+            echo "Found $HIGH_OR_CRITICAL HIGH/CRITICAL Trivy findings. Blocking deployment."
             exit 1
           fi
-          if [ "${{ steps.trivy-config.outcome }}" != "success" ]; then
-            echo "Trivy Docker/Compose configuration scan failed."
-            exit 1
-          fi
-          echo "No blocking Trivy findings were detected."
+
+          echo "No HIGH/CRITICAL Trivy findings detected. LOW findings do not block deployment."
 
   build-and-push-images:
     name: Build and Push Docker Hub Images
@@ -252,17 +287,13 @@ jobs:
           export FABULA_BACKEND_TAG="$BACKEND_TAG"
           export FABULA_FRONTEND_TAG="$FRONTEND_TAG"
 
-          # Load only scanner notification variables from the scanner environment.
           set -a
           . "$SCANNER_DIR/.env"
           set +a
           test -n "${TELEGRAM_BOT_TOKEN:-}" || { echo "TELEGRAM_BOT_TOKEN is missing"; exit 1; }
           test -n "${TELEGRAM_CHAT_ID:-}" || { echo "TELEGRAM_CHAT_ID is missing"; exit 1; }
 
-          TARGET_URL="${TARGET_URL:-}"
-          if [ -z "$TARGET_URL" ]; then
-            TARGET_URL="$(sed -n 's/^TARGET_URL=//p' .env.deploy | tail -n 1)"
-          fi
+          TARGET_URL="$(sed -n 's/^TARGET_URL=//p' .env.deploy | tail -n 1)"
           test -n "$TARGET_URL" || { echo "TARGET_URL must be in .env.deploy"; exit 1; }
           TARGET_URL="${TARGET_URL%/}"
 
@@ -292,8 +323,8 @@ jobs:
               "$DEPLOY_DIR/maintenance-on.sh"
             else
               touch "$DEPLOY_DIR/maintenance.flag"
+              nginx -t && systemctl reload nginx
             fi
-            nginx -t && systemctl reload nginx || true
           }
 
           disable_maintenance() {
@@ -301,8 +332,8 @@ jobs:
               "$DEPLOY_DIR/maintenance-off.sh"
             else
               rm -f "$DEPLOY_DIR/maintenance.flag"
+              nginx -t && systemctl reload nginx
             fi
-            nginx -t && systemctl reload nginx || true
           }
 
           report_failure() {
@@ -314,7 +345,6 @@ jobs:
             send_document "${report_base}.html" "Fabula security HTML report: ${reason}"
           }
 
-          echo "Logging in to Docker Hub is expected to be completed before this script."
           docker compose --env-file .env.deploy -f "$COMPOSE_FILE" -p fabula pull
           docker compose --env-file .env.deploy -f "$COMPOSE_FILE" -p fabula up -d
           docker compose --env-file .env.deploy -f "$COMPOSE_FILE" -p fabula exec -T backend alembic upgrade head
@@ -327,6 +357,7 @@ jobs:
             fi
             sleep 5
           done
+
           if [ "$backend_healthy" != true ]; then
             docker compose --env-file .env.deploy -f "$COMPOSE_FILE" -p fabula ps
             docker compose --env-file .env.deploy -f "$COMPOSE_FILE" -p fabula logs --tail=100 backend
@@ -360,8 +391,7 @@ jobs:
           summary="Fabula security scan\n\nTarget: ${TARGET_URL}\nBackend: ${BACKEND_TAG}\nFrontend: ${FRONTEND_TAG}\n\nCRITICAL: ${critical}\nHIGH: ${high}\nMEDIUM: ${medium}\nLOW: ${low}\nINFO: ${info}"
 
           if [ "$scanner_rc" -ne 0 ] || [ "$critical" -gt 0 ] || [ "$high" -gt 0 ]; then
-            reason="Critical/High findings or scanner failure"
-            report_failure "$reason" "$report_base"
+            report_failure "Critical/High findings or scanner failure" "$report_base"
             send_message "$summary\n\nAction: MAINTENANCE MODE ENABLED"
             exit 1
           fi
@@ -453,6 +483,7 @@ jobs:
           set -euo pipefail
           test -n "$TARGET_URL" || { echo "TARGET_URL is not configured"; exit 1; }
           TARGET_URL="${TARGET_URL%/}"
+
           for attempt in {1..12}; do
             if curl --fail --silent "$TARGET_URL/api/health" >/dev/null; then
               echo "Public health check passed."
@@ -460,5 +491,6 @@ jobs:
             fi
             sleep 10
           done
+
           echo "Public health check failed: $TARGET_URL/api/health"
           exit 1
