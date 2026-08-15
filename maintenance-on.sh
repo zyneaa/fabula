@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd "$HOME/fabula"
+FABULA_DIR=/var/www/fabula
+MAINTENANCE_FLAG="$FABULA_DIR/maintenance.flag"
 
-# Create maintenance flag file
-touch maintenance.flag
+mkdir -p "$FABULA_DIR"
+touch "$MAINTENANCE_FLAG"
 
-echo "Maintenance mode enabled."
-echo "To disable maintenance mode, remove the flag: rm -f maintenance.flag"
+if command -v nginx >/dev/null 2>&1; then
+  nginx -t
+  systemctl reload nginx
+fi
+
+echo "Fabula maintenance mode enabled."
+echo "Flag: $MAINTENANCE_FLAG"

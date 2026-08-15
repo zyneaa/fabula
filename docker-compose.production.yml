@@ -1,16 +1,19 @@
-version: '3.8'
-
 services:
-  db:
+  postgres:
     image: postgres:16
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-fabula}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-fabula}
+      POSTGRES_USER: "${POSTGRES_USER:?POSTGRES_USER is required}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+      POSTGRES_DB: "${POSTGRES_DB:?POSTGRES_DB is required}"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - fabula_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fabula} -d ${POSTGRES_DB:-fabula}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -18,52 +21,66 @@ services:
       - fabula-network
 
   backend:
-    image: ${REGISTRY:-fabula}/fabula:${TAG:-latest}
+    image: "${DOCKERHUB_IMAGE_NAME:-malangaungja/fabula}:${FABULA_BACKEND_TAG:-backend-latest}"
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8001:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-fabula}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-fabula}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_ALGORITHM=HS256
-      - JWT_EXPIRE_MINUTES=60
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - DEFAULT_LLM_MODEL=${DEFAULT_LLM_MODEL:-google/gemma-4-26b-a4b-it}
-      - UPLOAD_DIR=./uploads
-      - MAX_UPLOAD_SIZE_MB=50
-      - CORS_ORIGINS=["${CORS_ORIGINS:-http://localhost:3000}"]
-      - PYTHONPATH=/app
+      DATABASE_URL: "postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET is required}"
+      JWT_ALGORITHM: "${JWT_ALGORITHM:-HS256}"
+      JWT_EXPIRE_MINUTES: "${JWT_EXPIRE_MINUTES:-60}"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:?OPENROUTER_API_KEY is required}"
+      DEFAULT_LLM_MODEL: "${DEFAULT_LLM_MODEL:-google/gemma-4-26b-a4b-it}"
+      UPLOAD_DIR: "${UPLOAD_DIR:-./uploads}"
+      MAX_UPLOAD_SIZE_MB: "${MAX_UPLOAD_SIZE_MB:-50}"
+      CORS_ORIGINS: "${CORS_ORIGINS:?CORS_ORIGINS is required}"
+      PYTHONPATH: /app
     volumes:
-      - ./uploads:/app/uploads
+      - fabula_uploads:/app/uploads
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+        ]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
       start_period: 40s
     networks:
       - fabula-network
-    deploy:
-      replicas: 2
-      restart_policy:
-        condition: on-failure
-        delay: 5s
 
   frontend:
-    image: ${REGISTRY:-fabula}/fabula:frontend-${TAG:-latest}
+    image: "${DOCKERHUB_IMAGE_NAME:-malangaungja/fabula}:${FABULA_FRONTEND_TAG:-frontend-latest}"
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3005:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O - http://localhost/ >/dev/null || exit 1"
+        ]
       interval: 30s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 10s
     networks:
       - fabula-network
+
+volumes:
+  fabula_postgres_data:
+  fabula_uploads:
 
 networks:
   fabula-network:
     driver: bridge
-
-volumes:
-  pgdata:

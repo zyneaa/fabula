@@ -2,19 +2,19 @@ name: Fabula CI/CD Pipeline
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
 
 permissions:
   contents: read
-  packages: write
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-  DOCKERHUB_IMAGE_NAME: bakawolf/fabula
-  PYTHON_VERSION: "3.13"
+  DOCKERHUB_IMAGE_NAME: malangaungja/fabula
+  PYTHON_VERSION: "3.14"
+  NODE_VERSION: "20"
 
 jobs:
   build-and-test:
@@ -33,11 +33,10 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
 
-      - name: Install Python dependencies
+      - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest ruff
 
       - name: Run backend tests
         run: pytest tests/ -v --tb=short
@@ -48,130 +47,98 @@ jobs:
       - name: Check Ruff formatting
         run: ruff format app/ tests/ --check
 
-      - name: Build Docker image
-        run: |
-          docker build \
-            -t "${{ env.IMAGE_NAME }}:latest" \
-            -t "${{ env.IMAGE_NAME }}:${{ github.sha }}" \
-            .
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: client/package-lock.json
 
-      - name: Validate Docker image metadata
-        run: |
-          docker image inspect "${{ env.IMAGE_NAME }}:latest" >/dev/null
-          echo "Docker image built successfully."
+      - name: Install frontend dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Run frontend lint
+        working-directory: client
+        run: npm run lint
+
+      - name: Build frontend
+        working-directory: client
+        run: npm run build
+
+      - name: Build backend image
+        run: docker build --tag fabula-backend:test --file Dockerfile .
+
+      - name: Build frontend image
+        run: docker build --tag fabula-frontend:test --file client/Dockerfile client
 
   security-scan:
-    name: Pre-deployment Security Scan
+    name: Pre-deployment Trivy Scan
     runs-on: ubuntu-latest
     needs: build-and-test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Set up Trivy
+      - name: Scan source, dependencies, and secrets
+        id: trivy-fs
+        continue-on-error: true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
+          scanners: vuln,secret
           format: sarif
           output: trivy-fs-results.sarif
-          severity: "CRITICAL,HIGH"
+          severity: HIGH,CRITICAL
           ignore-unfixed: true
+          exit-code: "1"
 
-      - name: Run Trivy secret scan
+      - name: Scan Docker and Compose configuration
+        id: trivy-config
+        continue-on-error: true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          scan-type: fs
+          scan-type: config
           scan-ref: .
           format: sarif
-          output: trivy-secret-results.sarif
-          severity: "CRITICAL,HIGH"
-          secrets: true
-          ignore-unfixed: true
+          output: trivy-config-results.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "1"
 
-      - name: Run Trivy Docker/Compose configuration scan
-        working-directory: .
-        run: |
-          set -euo pipefail
-          mkdir -p reports
-
-          trivy config \
-            --severity HIGH,CRITICAL \
-            --exit-code 0 \
-            --format json \
-            . > reports/trivy-config.json || true
-
-          trivy compose \
-            --severity HIGH,CRITICAL \
-            --exit-code 0 \
-            --format json \
-            docker-compose.yml > reports/trivy-compose.json || true
-
-      - name: Upload all Trivy scan results
+      - name: Upload Trivy reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-all-scans
+          name: trivy-security-reports
           path: |
             trivy-fs-results.sarif
-            trivy-secret-results.sarif
             trivy-config-results.sarif
-            trivy-compose-results.sarif
           retention-days: 30
           if-no-files-found: warn
 
-      - name: Check Trivy findings
+      - name: Enforce Trivy results
+        if: always()
         run: |
           set -euo pipefail
-
-          TOTAL_CRITICAL=0
-
-          for f in trivy-fs-results.sarif trivy-secret-results.sarif trivy-config-results.sarif trivy-compose-results.sarif; do
-            if [ -f "$f" ]; then
-              CRITICAL=$(python -c "import json,sys; d=json.load(open(sys.argv[1])); print(sum(1 for r in d.get('results',[]) if r.get('severity','').upper() in ('CRITICAL','HIGH')))" "$f" 2>/dev/null || echo "0")
-              echo "$f: $CRITICAL critical/high findings"
-              TOTAL_CRITICAL=$((TOTAL_CRITICAL + CRITICAL))
-            fi
-          done
-
-          if [ "$TOTAL_CRITICAL" -gt 0 ]; then
-            echo "CRITICAL: Found $TOTAL_CRITICAL critical/high issues. Blocking deployment."
+          if [ "${{ steps.trivy-fs.outcome }}" != "success" ]; then
+            echo "Trivy source, dependency, or secret scan failed."
             exit 1
           fi
-
-          echo "No critical/high issues found."
-
-  security-summary:
-    name: Security Scan Summary
-    runs-on: ubuntu-latest
-    needs: [build-and-test, security-scan]
-    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-    steps:
-      - name: Download security scan report
-        id: download-report
-        if: always()
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: trivy-all-scans
-          path: trivy-reports/
-
-      - name: Generate security summary
-        if: always()
-        run: |
-          set -euo pipefail
-          echo "=== Security Scan Summary ==="
-          echo "All scans completed. Check artifacts for details."
+          if [ "${{ steps.trivy-config.outcome }}" != "success" ]; then
+            echo "Trivy Docker/Compose configuration scan failed."
+            exit 1
+          fi
+          echo "No blocking Trivy findings were detected."
 
   build-and-push-images:
-    name: Build and Push Docker Images
+    name: Build and Push Docker Hub Images
     runs-on: ubuntu-latest
     needs: [build-and-test, security-scan]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -186,311 +153,312 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push backend image to Docker Hub
+      - name: Build and push backend image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ env.DOCKERHUB_IMAGE_NAME }}:latest
-            ${{ env.DOCKERHUB_IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.DOCKERHUB_IMAGE_NAME }}:backend-${{ github.sha }}
+            ${{ env.DOCKERHUB_IMAGE_NAME }}:backend-latest
 
-      - name: Build and push frontend image to Docker Hub
+      - name: Build and push frontend image
         uses: docker/build-push-action@v6
         with:
           context: ./client
           file: ./client/Dockerfile
           push: true
           tags: |
-            ${{ env.DOCKERHUB_IMAGE_NAME }}:frontend-latest
             ${{ env.DOCKERHUB_IMAGE_NAME }}:frontend-${{ github.sha }}
+            ${{ env.DOCKERHUB_IMAGE_NAME }}:frontend-latest
 
-      - name: Build and push backend image to GHCR
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-
-  deploy:
-    name: Deploy to Vultr VPS
+  deploy-and-scan-on-vps:
+    name: Deploy and Scan on VPS
     runs-on: ubuntu-latest
     needs: build-and-push-images
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    timeout-minutes: 20
+    timeout-minutes: 35
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Validate deployment configuration
+      - name: Validate deployment inputs
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           set -euo pipefail
           test -n "$VPS_HOST" || { echo "VPS_HOST is not configured"; exit 1; }
           test -n "$VPS_USER" || { echo "VPS_USER is not configured"; exit 1; }
           test -n "$VPS_SSH_KEY" || { echo "VPS_SSH_KEY is not configured"; exit 1; }
-          test -f docker-compose.yml || { echo "docker-compose.yml is missing"; exit 1; }
+          test -n "$DOCKERHUB_USERNAME" || { echo "DOCKERHUB_USERNAME is not configured"; exit 1; }
+          test -n "$DOCKERHUB_TOKEN" || { echo "DOCKERHUB_TOKEN is not configured"; exit 1; }
+          test -f docker-compose.production.yml || { echo "docker-compose.production.yml is missing"; exit 1; }
+          test -f maintenance-on.sh || { echo "maintenance-on.sh is missing"; exit 1; }
+          test -f maintenance-off.sh || { echo "maintenance-off.sh is missing"; exit 1; }
 
-      - name: Create SSH configuration
+      - name: Configure SSH
         env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          if [ -n "${VPS_KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          fi
+          chmod 644 ~/.ssh/known_hosts
 
-      - name: Create deployment script
+      - name: Package scanner source without VPS secrets or reports
         run: |
-          cat > deploy.sh <<'EOF'
+          tar \
+            --exclude='fabula_scanner/.env' \
+            --exclude='fabula_scanner/.venv' \
+            --exclude='fabula_scanner/reports' \
+            --exclude='fabula_scanner/__pycache__' \
+            -czf fabula-scanner-source.tar.gz \
+            fabula_scanner
+
+      - name: Create remote deployment and security-response script
+        run: |
+          cat > deploy-and-scan.sh <<'REMOTE'
           #!/usr/bin/env bash
           set -euo pipefail
 
-          cd /var/www/fabula
+          DEPLOY_DIR=/var/www/fabula
+          SCANNER_DIR=/var/www/fabula_scanner
+          COMPOSE_FILE=docker-compose.production.yml
+          BACKEND_TAG="${1:?backend tag is required}"
+          FRONTEND_TAG="${2:?frontend tag is required}"
 
-          export COMPOSE_PROJECT_NAME=fabula
+          cd "$DEPLOY_DIR"
+          test -f .env.deploy || { echo ".env.deploy is missing"; exit 1; }
+          test -f "$COMPOSE_FILE" || { echo "$COMPOSE_FILE is missing"; exit 1; }
+          test -x "$SCANNER_DIR/.venv/bin/python" || { echo "Scanner virtualenv is missing"; exit 1; }
+          test -f "$SCANNER_DIR/.env" || { echo "Scanner .env is missing"; exit 1; }
 
+          export DOCKERHUB_IMAGE_NAME=malangaungja/fabula
+          export FABULA_BACKEND_TAG="$BACKEND_TAG"
+          export FABULA_FRONTEND_TAG="$FRONTEND_TAG"
+
+          # Load only scanner notification variables from the scanner environment.
           set -a
-          . ./.env.deploy
+          . "$SCANNER_DIR/.env"
           set +a
+          test -n "${TELEGRAM_BOT_TOKEN:-}" || { echo "TELEGRAM_BOT_TOKEN is missing"; exit 1; }
+          test -n "${TELEGRAM_CHAT_ID:-}" || { echo "TELEGRAM_CHAT_ID is missing"; exit 1; }
 
-          # Ensure DATABASE_URL is set
-          if [ -z "${DATABASE_URL:-}" ]; then
-            DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+          TARGET_URL="${TARGET_URL:-}"
+          if [ -z "$TARGET_URL" ]; then
+            TARGET_URL="$(sed -n 's/^TARGET_URL=//p' .env.deploy | tail -n 1)"
+          fi
+          test -n "$TARGET_URL" || { echo "TARGET_URL must be in .env.deploy"; exit 1; }
+          TARGET_URL="${TARGET_URL%/}"
+
+          send_message() {
+            local text="$1"
+            curl --fail --silent --show-error \
+              -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+              --data-urlencode "text=${text}" \
+              >/dev/null
+          }
+
+          send_document() {
+            local file="$1"
+            local caption="$2"
+            test -f "$file" || return 0
+            curl --fail --silent --show-error \
+              -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+              -F "chat_id=${TELEGRAM_CHAT_ID}" \
+              -F "document=@${file}" \
+              -F "caption=${caption}" \
+              >/dev/null
+          }
+
+          enable_maintenance() {
+            if [ -x "$DEPLOY_DIR/maintenance-on.sh" ]; then
+              "$DEPLOY_DIR/maintenance-on.sh"
+            else
+              touch "$DEPLOY_DIR/maintenance.flag"
+            fi
+            nginx -t && systemctl reload nginx || true
+          }
+
+          disable_maintenance() {
+            if [ -x "$DEPLOY_DIR/maintenance-off.sh" ]; then
+              "$DEPLOY_DIR/maintenance-off.sh"
+            else
+              rm -f "$DEPLOY_DIR/maintenance.flag"
+            fi
+            nginx -t && systemctl reload nginx || true
+          }
+
+          report_failure() {
+            local reason="$1"
+            local report_base="$2"
+            enable_maintenance
+            send_message "FABULA SECURITY ALERT\n\nStatus: MAINTENANCE MODE ENABLED\nTarget: ${TARGET_URL}\nReason: ${reason}\nBackend tag: ${BACKEND_TAG}\nFrontend tag: ${FRONTEND_TAG}\n\nFull JSON and HTML reports are attached when available."
+            send_document "${report_base}.json" "Fabula security JSON report: ${reason}"
+            send_document "${report_base}.html" "Fabula security HTML report: ${reason}"
+          }
+
+          echo "Logging in to Docker Hub is expected to be completed before this script."
+          docker compose --env-file .env.deploy -f "$COMPOSE_FILE" -p fabula pull
+          docker compose --env-file .env.deploy -f "$COMPOSE_FILE" -p fabula up -d
+          docker compose --env-file .env.deploy -f "$COMPOSE_FILE" -p fabula exec -T backend alembic upgrade head
+
+          backend_healthy=false
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8001/health >/dev/null; then
+              backend_healthy=true
+              break
+            fi
+            sleep 5
+          done
+          if [ "$backend_healthy" != true ]; then
+            docker compose --env-file .env.deploy -f "$COMPOSE_FILE" -p fabula ps
+            docker compose --env-file .env.deploy -f "$COMPOSE_FILE" -p fabula logs --tail=100 backend
+            report_failure "Backend health check failed" "$SCANNER_DIR/reports/deployment-failure"
+            exit 1
           fi
 
-          echo "Starting all services..."
-          docker compose -p fabula --env-file .env.deploy up -d
+          mkdir -p "$SCANNER_DIR/reports"
+          report_base="$SCANNER_DIR/reports/live-scan-$(date -u +%Y%m%dT%H%M%SZ)"
+          scanner_rc=0
+          (
+            cd "$SCANNER_DIR"
+            .venv/bin/python fabula.py \
+              --target "$TARGET_URL" \
+              --output "$report_base" \
+              --format both \
+              --no-telegram
+          ) > "${report_base}.log" 2>&1 || scanner_rc=$?
 
-          echo "Waiting for services to be ready..."
-          sleep 15
+          if [ ! -f "${report_base}.json" ]; then
+            report_failure "Scanner failed with exit code ${scanner_rc} and produced no JSON report" "$report_base"
+            exit 1
+          fi
 
-          echo "Running database migrations..."
-          docker compose -p fabula cp .env.app backend:/app/.env
-          docker compose -p fabula exec -T backend python -m alembic upgrade head
+          critical="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("summary", {}).get("critical", 0))' < "${report_base}.json")"
+          high="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("summary", {}).get("high", 0))' < "${report_base}.json")"
+          medium="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("summary", {}).get("medium", 0))' < "${report_base}.json")"
+          low="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("summary", {}).get("low", 0))' < "${report_base}.json")"
+          info="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("summary", {}).get("info", 0))' < "${report_base}.json")"
 
-          echo "Waiting for application health check..."
-          for attempt in {1..20}; do
-            if curl --fail --silent http://localhost:8000/health >/dev/null; then
-              echo "Deployment successful."
-              exit 0
-            fi
-            sleep 5
-          done
+          summary="Fabula security scan\n\nTarget: ${TARGET_URL}\nBackend: ${BACKEND_TAG}\nFrontend: ${FRONTEND_TAG}\n\nCRITICAL: ${critical}\nHIGH: ${high}\nMEDIUM: ${medium}\nLOW: ${low}\nINFO: ${info}"
 
-          echo "Health check failed."
-          docker compose -p fabula ps
-          docker compose -p fabula logs --tail=100 backend
-          exit 1
-          EOF
+          if [ "$scanner_rc" -ne 0 ] || [ "$critical" -gt 0 ] || [ "$high" -gt 0 ]; then
+            reason="Critical/High findings or scanner failure"
+            report_failure "$reason" "$report_base"
+            send_message "$summary\n\nAction: MAINTENANCE MODE ENABLED"
+            exit 1
+          fi
 
-          chmod +x deploy.sh
+          disable_maintenance
+          send_message "$summary\n\nAction: Site remains online. No Critical or High findings detected."
+          echo "Security scan passed."
+          REMOTE
+          chmod +x deploy-and-scan.sh
 
-      - name: Prepare VPS directory
+      - name: Prepare VPS directories
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
-          ssh -i ~/.ssh/deploy_key \
-            -o StrictHostKeyChecking=no \
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
             "$VPS_USER@$VPS_HOST" \
-            'mkdir -p /var/www/fabula && chown -R "$VPS_USER":"$VPS_USER" /var/www/fabula'
+            'mkdir -p /var/www/fabula /var/www/fabula_scanner/reports'
 
-      - name: Copy deployment files to VPS
+      - name: Copy production files and scanner source
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
         run: |
-          scp -i ~/.ssh/deploy_key \
-            -o StrictHostKeyChecking=no \
-            docker-compose.yml deploy.sh \
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            docker-compose.production.yml maintenance-on.sh maintenance-off.sh deploy-and-scan.sh \
             "$VPS_USER@$VPS_HOST:/var/www/fabula/"
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            fabula-scanner-source.tar.gz \
+            "$VPS_USER@$VPS_HOST:/tmp/fabula-scanner-source.tar.gz"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            'tar -xzf /tmp/fabula-scanner-source.tar.gz -C /var/www && rm -f /tmp/fabula-scanner-source.tar.gz && chmod +x /var/www/fabula/maintenance-on.sh /var/www/fabula/maintenance-off.sh /var/www/fabula/deploy-and-scan.sh'
 
-      - name: Deploy on VPS
+      - name: Log in to Docker Hub on VPS
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
-        run: |
-          ssh -i ~/.ssh/deploy_key \
-            -o StrictHostKeyChecking=no \
-            "$VPS_USER@$VPS_HOST" \
-            'bash /var/www/fabula/deploy.sh'
-
-      - name: Check local health
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           set -euo pipefail
-          for attempt in {1..10}; do
-            if curl --fail --silent http://localhost:8000/health >/dev/null 2>&1; then
-              echo "Local health check passed."
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "Local health check failed."
-          exit 1
+          printf '%s' "$DOCKERHUB_TOKEN" | ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            "docker login --username '$DOCKERHUB_USERNAME' --password-stdin"
+
+      - name: Deploy exact images, scan on VPS, and enforce security policy
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            "bash /var/www/fabula/deploy-and-scan.sh backend-${GITHUB_SHA} frontend-${GITHUB_SHA}"
+
+      - name: Collect VPS reports
+        if: always()
+        continue-on-error: true
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          mkdir -p vps-reports
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -r \
+            "$VPS_USER@$VPS_HOST:/var/www/fabula_scanner/reports/." \
+            vps-reports/
+
+      - name: Upload VPS reports to GitHub Actions
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fabula-vps-security-reports
+          path: vps-reports/
+          retention-days: 30
+          if-no-files-found: warn
 
   public-health-check:
-    name: Check Public Website Health
+    name: Check Public Fabula Health
     runs-on: ubuntu-latest
-    needs: deploy
+    needs: deploy-and-scan-on-vps
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 10
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Check public health endpoint
+      - name: Check public API health endpoint
         env:
           TARGET_URL: ${{ secrets.TARGET_URL }}
         run: |
           set -euo pipefail
-          echo "Waiting for public endpoint..."
-          sleep 10
-          for attempt in {1..10}; do
-            if curl --fail --silent "$TARGET_URL/health" >/dev/null 2>&1; then
+          test -n "$TARGET_URL" || { echo "TARGET_URL is not configured"; exit 1; }
+          TARGET_URL="${TARGET_URL%/}"
+          for attempt in {1..12}; do
+            if curl --fail --silent "$TARGET_URL/api/health" >/dev/null; then
               echo "Public health check passed."
               exit 0
             fi
             sleep 10
           done
-          echo "Public health check failed."
+          echo "Public health check failed: $TARGET_URL/api/health"
           exit 1
-
-  live-security-scan:
-    name: Run Fabula Live Scanner
-    runs-on: ubuntu-latest
-    needs: public-health-check
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: fabula_scanner/requirements.txt
-
-      - name: Install scanner dependencies
-        working-directory: fabula_scanner
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyyaml rich colorama
-
-      - name: Run Fabula live scanner
-        id: live_scan
-        continue-on-error: true
-        working-directory: fabula_scanner
-        env:
-          TARGET_URL: ${{ secrets.TARGET_URL }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          set -o pipefail
-          mkdir -p reports
-
-          python fabula.py \
-            --target "$TARGET_URL" \
-            --output reports/live-scan \
-            --format json \
-            2>&1 | tee live-scan.log
-
-          if grep -Eqi \
-            'No response|Could not fetch target|Could not fetch target URL|No IP resolved|Could not resolve target' \
-            live-scan.log; then
-            echo "The scanner could not complete a valid live scan."
-            exit 1
-          fi
-
-      - name: Upload live scan report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: live-scan-report
-          path: fabula_scanner/reports/
-          retention-days: 30
-          if-no-files-found: warn
-
-  live-scan-response:
-    name: Respond to Live Scan Result
-    runs-on: ubuntu-latest
-    needs: live-security-scan
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-    steps:
-      - name: Download live scan report
-        id: download-report
-        if: always()
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: live-scan-report
-          path: fabula_scanner/reports/
-
-      - name: Respond to live-scan result
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-        run: |
-          set -euo pipefail
-
-          send_telegram() {
-            curl --fail --silent --show-error \
-              -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-              --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
-              --data-urlencode "text=$1" \
-              >/dev/null
-          }
-
-          if [ "${{ needs.live-security-scan.result }}" != "success" ]; then
-            send_telegram "Fabula live security scan FAILED or could not reach the target. The result is not a clean scan. Review GitHub Actions immediately."
-            exit 1
-          fi
-
-          REPORT="fabula_scanner/reports/live-scan.json"
-          if [ ! -f "$REPORT" ]; then
-            send_telegram "Fabula live security scan produced no report. The deployment requires investigation."
-            exit 1
-          fi
-
-          CRITICAL="$(python -c 'import json,sys; print(json.load(sys.stdin).get("summary", {}).get("critical", 0))' < "$REPORT")"
-          SENSITIVE="$(python -c 'import json,sys; print(json.load(sys.stdin).get("summary", {}).get("sensitive", 0))' < "$REPORT")"
-
-          echo "Critical findings: $CRITICAL"
-          echo "Sensitive findings: $SENSITIVE"
-
-          if [ "$CRITICAL" -gt 0 ] || [ "$SENSITIVE" -gt 0 ]; then
-            send_telegram "CRITICAL: Fabula live scan found a sensitive vulnerability. Enabling maintenance mode on the Vultr deployment. Critical: ${CRITICAL}; Sensitive: ${SENSITIVE}. Review GitHub Actions artifact: live-scan-report. Target: ${{ secrets.TARGET_URL }}"
-
-            ssh -i ~/.ssh/deploy_key \
-              -o StrictHostKeyChecking=no \
-              "$VPS_USER@$VPS_HOST" \
-              'cd "$HOME/fabula" && ./maintenance-on.sh'
-
-            exit 1
-          fi
-
-          send_telegram "Fabula deployment completed and live security scan found no Critical or Sensitive findings."

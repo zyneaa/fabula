@@ -56,3 +56,4 @@ fabula_scanner/config/*.env
 # Telegram tokens
 TELEGRAM_BOT_TOKEN
 TELEGRAM_CHAT_ID
+.ruff_cache/

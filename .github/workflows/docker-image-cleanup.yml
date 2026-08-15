@@ -2,37 +2,77 @@ name: Cleanup Old Docker Images
 
 on:
   schedule:
-    - cron: '0 0 1 * *'  # First day of each month
+    - cron: "0 0 1 * *"
   workflow_dispatch:
+
+env:
+  DOCKERHUB_NAMESPACE: malangaungja
+  RETENTION_DAYS: "30"
+
+permissions: {}
 
 jobs:
   cleanup:
-    name: Cleanup Old Docker Images
+    name: Delete old Docker Hub tags
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 15
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Delete old images
+      - name: Delete old tags from Docker Hub
         env:
-          RETENTION_DAYS: 30
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          NAMESPACE: ${{ env.DOCKERHUB_NAMESPACE }}
+          RETENTION_DAYS: ${{ env.RETENTION_DAYS }}
+        shell: bash
         run: |
-          echo "Deleting images older than $RETENTION_DAYS days..."
-          # This would require docker-credential-helpers or manual cleanup
-          # For now, we'll just log the cleanup status
-          echo "Image cleanup completed. Consider using Docker Hub's tag retention policies."
+          set -euo pipefail
 
-      - name: Notify cleanup
-        if: github.event_name == 'schedule'
-        run: |
-          echo "✅ Docker image cleanup completed"
+          test -n "$DOCKERHUB_USERNAME" || { echo "DOCKERHUB_USERNAME is missing"; exit 1; }
+          test -n "$DOCKERHUB_TOKEN" || { echo "DOCKERHUB_TOKEN is missing"; exit 1; }
+
+          HUB_TOKEN="$({
+            curl --fail --silent --show-error \
+              -X POST https://hub.docker.com/v2/users/login/ \
+              -H 'Content-Type: application/json' \
+              -d "$(jq -n --arg username "$DOCKERHUB_USERNAME" --arg password "$DOCKERHUB_TOKEN" '{username:$username,password:$password}' )" \
+              | jq -r '.token'
+          })"
+
+          test -n "$HUB_TOKEN" && test "$HUB_TOKEN" != "null" || {
+            echo "Docker Hub authentication failed"
+            exit 1
+          }
+
+          cutoff="$(date -u -d "-${RETENTION_DAYS} days" +%s)"
+
+          for repository in fabula-backend fabula-frontend; do
+            echo "Inspecting ${NAMESPACE}/${repository}"
+            url="https://hub.docker.com/v2/repositories/${NAMESPACE}/${repository}/tags?page_size=100"
+
+            while [ -n "$url" ] && [ "$url" != "null" ]; do
+              response="$(curl --fail --silent --show-error \
+                -H "Authorization: JWT $HUB_TOKEN" \
+                "$url" )"
+
+              echo "$response" | jq -c '.results[]' | while read -r tag; do
+                name="$(jq -r '.name' <<< "$tag")"
+                updated="$(jq -r '.last_updated // empty' <<< "$tag")"
+
+                # Never delete the stable fallback tag.
+                [ "$name" = "latest" ] && continue
+                [ -z "$updated" ] && continue
+
+                updated_epoch="$(date -u -d "$updated" +%s)"
+                if [ "$updated_epoch" -lt "$cutoff" ]; then
+                  echo "Deleting ${NAMESPACE}/${repository}:${name}"
+                  curl --fail --silent --show-error \
+                    -X DELETE \
+                    -H "Authorization: JWT $HUB_TOKEN" \
+                    "https://hub.docker.com/v2/repositories/${NAMESPACE}/${repository}/tags/${name}/"
+                fi
+              done
+
+              url="$(echo "$response" | jq -r '.next // empty' )"
+            done
+          done
