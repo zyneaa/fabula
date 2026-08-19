@@ -1,0 +1,210 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0">
+  <diagram name="Fabula CI CD Architecture" id="fabula2">
+    <mxGraphModel dx="2307" dy="1196" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1400" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontFamily=Georgia;fontSize=36;fontStyle=2;textDecoration=underline 1;fontColor=#000000;" value="Fabula CI/CD System Architecture Diagram" vertex="1">
+          <mxGeometry height="70" width="1350" x="25" y="55" as="geometry" />
+        </mxCell>
+        <mxCell id="dev-box" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#333333;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="140" width="330" x="1540" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="dev-title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontColor=#333333;" value="Developer&#39;s Local Machine" vertex="1">
+          <mxGeometry height="28" width="330" x="1540" y="55" as="geometry" />
+        </mxCell>
+        <mxCell id="dev-push" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=2;fontSize=14;" value="Push Code to GitHub" vertex="1">
+          <mxGeometry height="60" width="220" x="1595" y="95" as="geometry" />
+        </mxCell>
+        <mxCell id="gh-box" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#333333;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="320" width="330" x="1540" y="235" as="geometry" />
+        </mxCell>
+        <mxCell id="gh-title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontColor=#333333;" value="GitHub" vertex="1">
+          <mxGeometry height="28" width="330" x="1540" y="245" as="geometry" />
+        </mxCell>
+        <mxCell id="gh-repo" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=2;fontSize=14;" value="GitHub Repo" vertex="1">
+          <mxGeometry height="60" width="220" x="1595" y="295" as="geometry" />
+        </mxCell>
+        <mxCell id="gh-actions" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=2;fontSize=14;" value="GitHub Actions CI/CD" vertex="1">
+          <mxGeometry height="80" width="250" x="1580" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="dh-box" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#333333;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="270" width="330" x="1540" y="605" as="geometry" />
+        </mxCell>
+        <mxCell id="dh-title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=15;fontColor=#333333;fontStyle=1;" value="Docker Hub" vertex="1">
+          <mxGeometry height="30" width="330" x="1540" y="615" as="geometry" />
+        </mxCell>
+        <mxCell id="dh-img" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=2;fontSize=13;align=center;verticalAlign=middle;spacing=3;wrap=1;" value="fabulalearning/fabula&#xa;&#xa;backend-{GIT SHA}&#xa;backend-latest&#xa;frontend-{GIT SHA}&#xa;frontend-latest" vertex="1">
+          <mxGeometry height="190" width="260" x="1575" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="vps-box" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8f8fa;strokeColor=#333333;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="770" width="1160" x="220" y="395" as="geometry" />
+        </mxCell>
+        <mxCell id="vps-title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#222222;" value="VPS (Ubuntu 22.04 LTS)" vertex="1">
+          <mxGeometry height="24" width="220" x="660" y="402" as="geometry" />
+        </mxCell>
+        <mxCell id="f2b" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=2;fontSize=14;" value="Fail2Ban" vertex="1">
+          <mxGeometry height="60" width="140" x="300" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="ufw" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=2;fontSize=14;" value="UFW Firewall" vertex="1">
+          <mxGeometry height="60" width="180" x="680" y="460" as="geometry" />
+        </mxCell>
+        <mxCell id="ssh" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=2;fontSize=14;fontStyle=1;" value="SSH Access" vertex="1">
+          <mxGeometry height="60" width="190" x="590" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="docker" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=2;fontSize=15;" value="Docker Engine" vertex="1">
+          <mxGeometry height="70" width="230" x="570" y="860" as="geometry" />
+        </mxCell>
+        <mxCell id="dnet-box" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f4f4f4;strokeColor=#333333;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="120" width="950" x="295" y="1025" as="geometry" />
+        </mxCell>
+        <mxCell id="dnet-title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#222222;" value="Docker Network" vertex="1">
+          <mxGeometry height="20" width="180" x="680" y="1030" as="geometry" />
+        </mxCell>
+        <mxCell id="db" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=2;fontSize=14;" value="PostgreSQL DB" vertex="1">
+          <mxGeometry height="62" width="150" x="325" y="1060" as="geometry" />
+        </mxCell>
+        <mxCell id="be" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=2;fontSize=14;" value="FastAPI Backend" vertex="1">
+          <mxGeometry height="62" width="160" x="505" y="1060" as="geometry" />
+        </mxCell>
+        <mxCell id="fe" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=2;fontSize=14;" value="React Frontend" vertex="1">
+          <mxGeometry height="62" width="155" x="695" y="1060" as="geometry" />
+        </mxCell>
+        <mxCell id="sc" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=2;fontSize=13;" value="Fabula Security Scanner" vertex="1">
+          <mxGeometry height="62" width="170" x="880" y="1060" as="geometry" />
+        </mxCell>
+        <mxCell id="tele" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=2;fontSize=12;" value="Telegram Security Alerts" vertex="1">
+          <mxGeometry height="62" width="150" x="1080" y="1060" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="tele-box" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#333333;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="200" width="330" x="1540" y="900" as="geometry" />
+        </mxCell>
+        <mxCell id="tele-title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=15;fontColor=#333333;fontStyle=1;" value="Telegram" vertex="1">
+          <mxGeometry height="30" width="330" x="1540" y="910" as="geometry" />
+        </mxCell>
+        <mxCell id="tele-api" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;strokeWidth=2;fontSize=12;align=center;verticalAlign=middle;spacing=3;" value="Telegram Bot API&#xa;&#xa;Deliver to PRIVATE GROUP&#xa;admin team can see&#xa;&#xa;HTML security alert&#xa;JSON report (.json)&#xa;HTML report (.html)" vertex="1">
+          <mxGeometry height="140" width="270" x="1570" y="945" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="dev-push" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeWidth=2;strokeColor=#222222;" target="gh-repo" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1705" y="190" as="sourcePoint" />
+            <mxPoint x="1705" y="275" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e1-label" connectable="0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cccccc;strokeColor=none;fontSize=12;fontColor=#333333;" value="git push" vertex="1">
+          <mxGeometry height="24" width="80" x="1665" y="197" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="gh-repo" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeWidth=2;strokeColor=#222222;" target="gh-actions" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1705" y="355" as="sourcePoint" />
+            <mxPoint x="1705" y="410" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e2-label" connectable="0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cccccc;strokeColor=none;fontSize=12;fontColor=#333333;" value="Trigger" vertex="1">
+          <mxGeometry height="24" width="80" x="1665" y="367" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="gh-actions" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeWidth=2;strokeColor=#222222;" target="dh-img" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1705" y="510" as="sourcePoint" />
+            <mxPoint x="1705" y="630" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3-label" connectable="0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cccccc;strokeColor=none;fontSize=12;fontColor=#333333;" value="Build &amp; Push" vertex="1">
+          <mxGeometry height="24" width="100" x="1655" y="562" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="gh-actions" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeWidth=2;strokeColor=#222222;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" target="ssh" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxArray as="points">
+              <mxPoint x="1380" y="470" />
+              <mxPoint x="1380" y="690" />
+              <mxPoint x="780" y="690" />
+            </mxArray>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4-label" connectable="0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cccccc;strokeColor=none;fontSize=12;fontColor=#333333;" value="SSH Deploy" vertex="1">
+          <mxGeometry height="24" width="90" x="1080" y="676" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="docker" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeWidth=2;strokeColor=#222222;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="dh-img" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxArray as="points">
+              <mxPoint x="1360" y="895" />
+              <mxPoint x="1360" y="755" />
+            </mxArray>
+            <mxPoint x="800" y="895" as="sourcePoint" />
+            <mxPoint x="1575" y="755" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5-label" connectable="0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cccccc;strokeColor=none;fontSize=12;fontColor=#333333;" value="Pull Images" vertex="1">
+          <mxGeometry height="24" width="90" x="1215" y="880" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="f2b" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeWidth=2;strokeColor=#222222;exitX=0.5;exitY=1;entryX=0.4;entryY=0;" target="ssh" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6-label" connectable="0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cccccc;strokeColor=none;fontSize=12;fontColor=#333333;" value="Protects" vertex="1">
+          <mxGeometry height="24" width="80" x="340" y="566" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="ufw" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeWidth=2;strokeColor=#222222;exitX=0.5;exitY=1;entryX=0.6;entryY=0;" target="ssh" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7-label" connectable="0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cccccc;strokeColor=none;fontSize=12;fontColor=#333333;" value="Protects" vertex="1">
+          <mxGeometry height="24" width="80" x="728" y="556" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="ssh" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeWidth=2;strokeColor=#222222;" target="docker" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="685" y="720" as="sourcePoint" />
+            <mxPoint x="685" y="835" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e8-label" connectable="0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cccccc;strokeColor=none;fontSize=12;fontColor=#333333;" value="Manage" vertex="1">
+          <mxGeometry height="24" width="70" x="655" y="777" as="geometry" />
+        </mxCell>
+        <mxCell id="e9a" edge="1" parent="1" source="docker" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeWidth=2;strokeColor=#222222;exitX=0.2;exitY=1;entryX=0.5;entryY=0;" target="db" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9a-label" connectable="0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cccccc;strokeColor=none;fontSize=12;fontColor=#333333;" value="Orchestrates" vertex="1">
+          <mxGeometry height="24" width="100" x="380" y="972" as="geometry" />
+        </mxCell>
+        <mxCell id="e9b" edge="1" parent="1" source="docker" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeWidth=2;strokeColor=#222222;exitX=0.4;exitY=1;entryX=0.5;entryY=0;" target="be" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9b-label" connectable="0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cccccc;strokeColor=none;fontSize=12;fontColor=#333333;" value="Orchestrates" vertex="1">
+          <mxGeometry height="24" width="100" x="572" y="972" as="geometry" />
+        </mxCell>
+        <mxCell id="e9c" edge="1" parent="1" source="docker" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeWidth=2;strokeColor=#222222;exitX=0.6;exitY=1;entryX=0.5;entryY=0;" target="fe" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9c-label" connectable="0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cccccc;strokeColor=none;fontSize=12;fontColor=#333333;" value="Orchestrates" vertex="1">
+          <mxGeometry height="24" width="100" x="766" y="972" as="geometry" />
+        </mxCell>
+        <mxCell id="e9d" edge="1" parent="1" source="docker" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeWidth=2;strokeColor=#222222;exitX=0.85;exitY=1;entryX=0.5;entryY=0;" target="sc" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9d-label" connectable="0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cccccc;strokeColor=none;fontSize=12;fontColor=#333333;" value="Orchestrates" vertex="1">
+          <mxGeometry height="24" width="100" x="958" y="972" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="e9e" edge="1" parent="1" source="docker" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeWidth=2;strokeColor=#222222;exitX=0.95;exitY=1;entryX=0.5;entryY=0;" target="tele" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9e-label" connectable="0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cccccc;strokeColor=none;fontSize=12;fontColor=#333333;" value="Orchestrates" vertex="1">
+          <mxGeometry height="24" width="100" x="1115" y="972" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="e10" edge="1" parent="1" source="sc" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeWidth=2;strokeColor=#222222;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="tele" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10-label" connectable="0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cccccc;strokeColor=none;fontSize=11;fontColor=#333333;" value="High or Critical Found" vertex="1">
+          <mxGeometry height="24" width="135" x="998" y="1035" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="e11" edge="1" parent="1" source="tele" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;endFill=1;strokeWidth=2;strokeColor=#222222;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" target="tele-api" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11-label" connectable="0" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cccccc;strokeColor=none;fontSize=11;fontColor=#333333;" value="Alert plus reports .json .html" vertex="1">
+          <mxGeometry height="24" width="185" x="1285" y="975" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

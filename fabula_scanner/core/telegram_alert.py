@@ -151,8 +151,8 @@ class TelegramAlert:
                 print(f"❌ Telegram send failed: {e}")
 
     def _build_message(self, findings: List[Dict], target: str) -> str:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
+        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
         severity_counts = {
             'CRITICAL': len([f for f in findings if f.get('severity', '').upper() == 'CRITICAL']),
             'HIGH': len([f for f in findings if f.get('severity', '').upper() == 'HIGH']),
@@ -160,68 +160,63 @@ class TelegramAlert:
             'LOW': len([f for f in findings if f.get('severity', '').upper() == 'LOW']),
             'INFO': len([f for f in findings if f.get('severity', '').upper() == 'INFO'])
         }
+        total = len(findings)
 
-        # Only show ACTION REQUIRED for CRITICAL findings
-        action_required = ""
-        if severity_counts['CRITICAL'] > 0:
-            action_required = "\n\n🚨 <b>ACTION REQUIRED:</b> CRITICAL vulnerabilities found! Investigate immediately!"
-        elif severity_counts['HIGH'] > 0:
-            action_required = "\n\n⚠️ <b>HIGH SEVERITY:</b> Review these issues soon."
+        thick_line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        thin_line  = "───────────────────────────"
 
-        emoji = '🔴' if severity_counts['CRITICAL'] > 0 else ('🟠' if severity_counts['HIGH'] > 0 else '🟡')
+        has_critical = severity_counts['CRITICAL'] > 0
+        has_high = severity_counts['HIGH'] > 0
 
-        # Build clean, readable message
-        message = f"""
-╔═══════════════════════════════════════════════════════════╗
-║  🔴 FABULA SECURITY SCANNER - ALERT                      ║
-╚═══════════════════════════════════════════════════════════╝
+        header_icon = '🔴' if has_critical else ('🟠' if has_high else '🟡')
 
-🎯 <b>Target:</b> <code>{target}</code>
-🕒 <b>Time:</b> {timestamp}
+        message = f"""{header_icon} <b>FABULA SECURITY SCANNER ALERT</b>
+ {thick_line}
 
-╔═══════════════════════════════════════════════════════════╗
-║  📊 SEVERITY SUMMARY                                       ║
-╚═══════════════════════════════════════════════════════════╝
-  🔴 CRITICAL: {severity_counts['CRITICAL']}
-  🟠 HIGH:     {severity_counts['HIGH']}
-  🟡 MEDIUM:   {severity_counts['MEDIUM']}
-  🔵 LOW:      {severity_counts['LOW']}
-  ℹ️ INFO:     {severity_counts['INFO']}
-  ─────────────────────
-  📊 TOTAL:    {len(findings)}
+ 🎯 <b>Target:</b> <code>{target}</code>
+ 🕒 <b>Scanned At:</b> {timestamp}
 
-╔═══════════════════════════════════════════════════════════╗
-║  📋 VULNERABILITY DETAILS                                  ║
-╚═══════════════════════════════════════════════════════════╝
+ 📊 <b>Vulnerability Summary:</b>
+ • 🔴 CRITICAL: {severity_counts['CRITICAL']}
+ • 🟠 HIGH:     {severity_counts['HIGH']}
+ • 🟡 MEDIUM:   {severity_counts['MEDIUM']}
+ • 🔵 LOW:      {severity_counts['LOW']}
+ • ℹ️ INFO:     {severity_counts['INFO']}
+ • <b>TOTAL:</b> {total}
+ {thick_line}
 """
-        # Add each finding (limit to max_findings)
+
         for idx, f in enumerate(findings[:self.max_findings], 1):
             severity = f.get('severity', 'INFO').upper()
             severity_icon = '🔴' if severity == 'CRITICAL' else ('🟠' if severity == 'HIGH' else ('🟡' if severity == 'MEDIUM' else ('🔵' if severity == 'LOW' else 'ℹ️')))
-            
-            title = f.get('title', 'Unknown')[:60]
-            description = f.get('description', '')[:100]
-            remediation = f.get('remediation', 'Not specified')[:80]
+
+            title = f.get('title', 'Unknown')
             module = f.get('module', 'Unknown')
-            
-            message += f"""
-{severity_icon} <b>#{idx} {severity}</b> - {title}
 
-📝 <i>{description}</i>
-🔧 <b>Fix:</b> {remediation}
-📂 <b>Module:</b> {module}
-────────────────────────────────────────
+            details_raw = f.get('description', '') or f.get('details', '') or f.get('evidence', '') or ''
+            if self.truncate_desc and len(details_raw) > self.truncate_desc:
+                details_raw = details_raw[:self.truncate_desc] + '\n... (truncated)'
+
+            remediation_raw = f.get('remediation', 'Remediation not specified.')
+
+            block = f"""
+{severity_icon} <b>#{idx} - {severity}</b>
+ <b>Title:</b> {title}
+ <b>Module:</b> {module}
+ <b>Details:</b>
+ {details_raw}
+ <b>Remediation:</b> {remediation_raw}
+ {thin_line}
 """
+            message += block
+
         if len(findings) > self.max_findings:
-            message += f"\n... and {len(findings) - self.max_findings} more findings (limit: {self.max_findings})\n"
+            message += f"\n... and {len(findings) - self.max_findings} more findings — see full JSON / HTML reports."
 
-        message += action_required
+        message += f"""
+ {thick_line}
+ ⚠️ <b>ACTION REQUIRED:</b> Investigate vulnerabilities immediately!"""
 
-        message += """
-╔═══════════════════════════════════════════════════════════╗
-║  📄 Full report: reports/report.html                      ║
-╚═══════════════════════════════════════════════════════════╝
-"""
         return message
 
     def _build_inline_keyboard(self) -> Dict:
@@ -246,10 +241,9 @@ class TelegramAlert:
         """Send a quick summary (for low-severity scans)"""
         if not self.bot_token or not self.chat_ids:
             return
-        
+
         total = len(findings)
-        
-        # Count by severity
+
         severity_counts = {
             'CRITICAL': 0,
             'HIGH': 0,
@@ -257,64 +251,58 @@ class TelegramAlert:
             'LOW': 0,
             'INFO': 0
         }
-        
+
         for f in findings:
             sev = f.get('severity', 'info').upper()
             if sev in severity_counts:
                 severity_counts[sev] += 1
-        
-        emoji = '✅' if total == 0 else ('🔴' if severity_counts['CRITICAL'] > 0 else ('🟠' if severity_counts['HIGH'] > 0 else '🟡'))
-        
+
+        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        thick_line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
         if total == 0:
-            message = f"""
-╔═══════════════════════════════════════════════════════════╗
-║  ✅ FABULA SCANNER - CLEAN                                ║
-╚═══════════════════════════════════════════════════════════╝
+            message = f"""✅ <b>FABULA SCANNER — CLEAN</b>
+ {thick_line}
 
-🎯 <b>Target:</b> <code>{target}</code>
-🕒 <b>Time:</b> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+ 🎯 <b>Target:</b> <code>{target}</code>
+ 🕒 <b>Scanned At:</b> {timestamp}
 
-✅ <b>No vulnerabilities found!</b>
-✅ <b>Happy scanning! 🎉</b>
+ ✅ No vulnerabilities found.
+ ✅ Happy scanning! 🎉
 """
         else:
-            message = f"""
-╔═══════════════════════════════════════════════════════════╗
-║  📊 FABULA SCANNER - SUMMARY                              ║
-╚═══════════════════════════════════════════════════════════╝
+            message = f"""📊 <b>FABULA SCANNER — SUMMARY</b>
+ {thick_line}
 
-🎯 <b>Target:</b> <code>{target}</code>
-🕒 <b>Time:</b> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+ 🎯 <b>Target:</b> <code>{target}</code>
+ 🕒 <b>Scanned At:</b> {timestamp}
 
-╔═══════════════════════════════════════════════════════════╗
-║  📊 SEVERITY SUMMARY                                       ║
-╚═══════════════════════════════════════════════════════════╝
-  🔴 CRITICAL: {severity_counts['CRITICAL']}
-  🟠 HIGH:     {severity_counts['HIGH']}
-  🟡 MEDIUM:   {severity_counts['MEDIUM']}
-  🔵 LOW:      {severity_counts['LOW']}
-  ℹ️ INFO:     {severity_counts['INFO']}
-  ─────────────────────
-  📊 TOTAL:    {total}
+ 📊 <b>Vulnerability Summary:</b>
+ • 🔴 CRITICAL: {severity_counts['CRITICAL']}
+ • 🟠 HIGH:     {severity_counts['HIGH']}
+ • 🟡 MEDIUM:   {severity_counts['MEDIUM']}
+ • 🔵 LOW:      {severity_counts['LOW']}
+ • ℹ️ INFO:     {severity_counts['INFO']}
+ • <b>TOTAL:</b> {total}
 """
-        
-        # Send to all chat IDs
+
         for chat_id in self.chat_ids:
             if not chat_id:
                 continue
-            
+
             payload = {
                 'chat_id': chat_id.strip(),
                 'text': message,
-                'parse_mode': 'HTML'
+                'parse_mode': 'HTML',
+                'disable_web_page_preview': True,
             }
-            
+
             if self.thread_id:
                 try:
                     payload['message_thread_id'] = int(self.thread_id)
                 except ValueError:
                     pass
-            
+
             try:
                 requests.post(self.api_url, data=payload, timeout=10)
                 print(f"✅ Telegram summary sent to {chat_id}")
