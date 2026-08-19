@@ -290,8 +290,18 @@ jobs:
           set -a
           . "$SCANNER_DIR/.env"
           set +a
-          test -n "${TELEGRAM_BOT_TOKEN:-}" || { echo "TELEGRAM_BOT_TOKEN is missing"; exit 1; }
-          test -n "${TELEGRAM_CHAT_ID:-}" || { echo "TELEGRAM_CHAT_ID is missing"; exit 1; }
+          test -n "${TELEGRAM_BOT_TOKEN:-}" || {
+            echo "TELEGRAM_BOT_TOKEN is missing"
+            exit 1
+          }
+
+          TELEGRAM_DESTINATIONS="${TELEGRAM_CHAT_IDS:-${TELEGRAM_CHAT_ID:-}}"
+          test -n "$TELEGRAM_DESTINATIONS" || {
+            echo "TELEGRAM_CHAT_IDS or TELEGRAM_CHAT_ID is missing"
+            exit 1
+          }
+
+          IFS=',' read -ra TELEGRAM_DESTINATION_LIST <<< "$TELEGRAM_DESTINATIONS"
 
           TARGET_URL="$(sed -n 's/^TARGET_URL=//p' .env.deploy | tail -n 1)"
           test -n "$TARGET_URL" || { echo "TARGET_URL must be in .env.deploy"; exit 1; }
@@ -306,25 +316,71 @@ jobs:
 
           send_message() {
             local text="$1"
-            curl --fail --silent --show-error \
-              -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-              --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
-              --data-urlencode "text=${text}" \
-              --data-urlencode "parse_mode=HTML" \
-              --data-urlencode "disable_web_page_preview=true" \
-              >/dev/null
+            local send_failed=0
+
+            for chat_id in "${TELEGRAM_DESTINATION_LIST[@]}"; do
+              chat_id="$(printf '%s' "$chat_id" | xargs)"
+              [ -n "$chat_id" ] || continue
+
+              if ! curl --fail --silent --show-error \
+                -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                --data-urlencode "chat_id=${chat_id}" \
+                --data-urlencode "text=${text}" \
+                --data-urlencode "parse_mode=HTML" \
+                --data-urlencode "disable_web_page_preview=true" \
+                >/dev/null; then
+                echo "Telegram message delivery failed" >&2
+                send_failed=1
+              fi
+            done
+
+            return "$send_failed"
           }
 
           send_document() {
             local file="$1"
             local caption="$2"
-            test -f "$file" || return 0
-            curl --fail --silent --show-error \
-              -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-              -F "chat_id=${TELEGRAM_CHAT_ID}" \
-              -F "document=@${file}" \
-              -F "caption=${caption}" \
-              >/dev/null
+            local send_failed=0
+            local redacted_file
+
+            [ -f "$file" ] || return 0
+            redacted_file="$(mktemp)"
+
+            python3 - "$file" "$redacted_file" <<'PY'
+          import re
+          import sys
+
+          source, destination = sys.argv[1:]
+          text = open(source, encoding="utf-8", errors="replace").read()
+          pattern = re.compile(
+              r'((?:"|\\b)(?:password|passwd|pass|token|secret|api[_-]?key|'
+              r'database[_-]?url|private[_-]?key|access[_-]?key|'
+              r'wordpress_db_password|mysql_password|postgres_password)'
+              r'(?:"|\\b)\\s*[:=]\\s*)("[^"]*"|\'[^\']*\'|[^,\\s}\\n]+)',
+              re.IGNORECASE,
+          )
+          text = pattern.sub(r'\\1[REDACTED]', text)
+          with open(destination, "w", encoding="utf-8") as handle:
+              handle.write(text)
+          PY
+
+            for chat_id in "${TELEGRAM_DESTINATION_LIST[@]}"; do
+              chat_id="$(printf '%s' "$chat_id" | xargs)"
+              [ -n "$chat_id" ] || continue
+
+              if ! curl --fail --silent --show-error \
+                -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+                -F "chat_id=${chat_id}" \
+                -F "document=@${redacted_file}" \
+                -F "caption=${caption} — sensitive values redacted" \
+                >/dev/null; then
+                echo "Telegram document delivery failed: $file" >&2
+                send_failed=1
+              fi
+            done
+
+            rm -f "$redacted_file"
+            return "$send_failed"
           }
 
           enable_maintenance() {
@@ -345,6 +401,106 @@ jobs:
             fi
           }
 
+          build_alert_message() {
+            local report_base="$1"
+            local reason="$2"
+
+            python3 - "$report_base.json" "$TARGET_URL" "$reason" "$BACKEND_TAG" "$FRONTEND_TAG" <<'PY'
+          import html
+          import json
+          import re
+          import sys
+          from datetime import datetime, timezone
+
+          report_path, target, reason, backend, frontend = sys.argv[1:]
+          data = json.load(open(report_path, encoding="utf-8"))
+          findings = data.get("findings", [])
+          counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+          secret_pattern = re.compile(
+              r'((?:"|\\b)(?:password|passwd|pass|token|secret|api[_-]?key|'
+              r'database[_-]?url|private[_-]?key|access[_-]?key|'
+              r'wordpress_db_password|mysql_password|postgres_password)'
+              r'(?:"|\\b)\\s*[:=]\\s*)("[^"]*"|\'[^\']*\'|[^,\\s}\\n]+)',
+              re.IGNORECASE,
+          )
+
+          def redact(value):
+              return secret_pattern.sub(r'\\1[REDACTED]', str(value or ""))
+
+          def esc(value):
+              return html.escape(redact(value), quote=False)
+
+          for finding in findings:
+              severity = str(finding.get("severity", "info")).lower()
+              if severity in counts:
+                  counts[severity] += 1
+
+          critical = counts["critical"]
+          high = counts["high"]
+          icon = "🔴" if critical else ("🟠" if high else "🟡")
+          thick = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          thin = "──────────────────────────"
+          lines = [
+              f"{icon} <b>FABULA SECURITY SCANNER ALERT</b>",
+              thick,
+              f"🎯 <b>Target:</b> <code>{esc(target)}</code>",
+              f"🕒 <b>Scanned At:</b> {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}",
+              "",
+              "📊 <b>Vulnerability Summary:</b>",
+              f"• 🔴 CRITICAL: {critical}",
+              f"• 🟠 HIGH:     {high}",
+              f"• 🟡 MEDIUM:   {counts['medium']}",
+              f"• 🔵 LOW:      {counts['low']}",
+              f"• ℹ️ INFO:     {counts['info']}",
+              f"• <b>TOTAL:</b> {len(findings)}",
+              thick,
+          ]
+
+          for index, finding in enumerate(findings[:10], 1):
+              severity = str(finding.get("severity", "INFO")).upper()
+              severity_icon = {
+                  "CRITICAL": "🔴",
+                  "HIGH": "🟠",
+                  "MEDIUM": "🟡",
+                  "LOW": "🔵",
+              }.get(severity, "ℹ️")
+              details = (
+                  finding.get("description")
+                  or finding.get("details")
+                  or finding.get("evidence")
+                  or "Not provided."
+              )
+              details = redact(details)
+              if len(details) > 700:
+                  details = details[:700] + "\\n… (truncated; see attached report)"
+              lines.extend([
+                  f"{severity_icon} <b>#{index} - {esc(severity)}</b>",
+                  f"<b>Title:</b> {esc(finding.get('title', 'Unknown'))}",
+                  f"<b>Module:</b> {esc(finding.get('module', 'Unknown'))}",
+                  f"<b>Details:</b> {html.escape(details, quote=False)}",
+                  f"<b>Remediation:</b> {esc(finding.get('remediation', 'Remediation not specified.'))}",
+                  thin,
+              ])
+
+          if len(findings) > 10:
+              lines.append(f"… and {len(findings) - 10} more findings. See attached JSON/HTML reports.")
+
+          lines.extend([
+              thick,
+              "<b>Actions taken</b>",
+              "• Deployment blocked",
+              "• Maintenance mode enabled",
+              "• JSON and HTML reports attached below",
+              "• Sensitive values redacted before delivery",
+              "",
+              f"<b>Reason:</b> {esc(reason)}",
+              "",
+              "⚠️ <b>ACTION REQUIRED:</b> Investigate vulnerabilities immediately!",
+          ])
+          print("\\n".join(lines)[:3900])
+          PY
+          }
+
           report_failure() {
             local reason="$1"
             local report_base="$2"
@@ -356,36 +512,10 @@ jobs:
             enable_maintenance
 
             local alert_message
-            alert_message="$(cat <<EOF
-          🔴 <b>FABULA SECURITY ALERT</b>
-
-          <b>Status:</b> 🔒 MAINTENANCE MODE ENABLED
-          <b>Target:</b> <code>${TARGET_URL}</code>
-          <b>Reason:</b> ${reason}
-
-          <b>Release</b>
-          • Backend: <code>${BACKEND_TAG}</code>
-          • Frontend: <code>${FRONTEND_TAG}</code>
-
-          <b>Severity summary</b>
-          🔴 Critical: <b>${critical}</b>
-          🟠 High: <b>${high}</b>
-          🟡 Medium: ${medium}
-          🔵 Low: ${low}
-          ℹ️ Info: ${info}
-
-          <b>Actions taken</b>
-          • Deployment blocked
-          • Maintenance mode enabled
-          • JSON report: ${json_status}
-          • HTML report: ${html_status}
-
-          Full reports are sent as separate Telegram documents below.
-          EOF
-          )"
-            send_message "$alert_message"
-            send_document "${report_base}.json" "Fabula JSON security report — ${reason}"
-            send_document "${report_base}.html" "Fabula HTML security report — ${reason}"
+            alert_message="$(build_alert_message "$report_base" "$reason")"
+            send_message "$alert_message" || true
+            send_document "${report_base}.json" "Fabula JSON security report — ${reason}" || true
+            send_document "${report_base}.html" "Fabula HTML security report — ${reason}" || true
           }
 
           docker compose --env-file .env.deploy -f "$COMPOSE_FILE" -p fabula pull

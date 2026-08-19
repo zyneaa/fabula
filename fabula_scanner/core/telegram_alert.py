@@ -1,313 +1,428 @@
-import requests
+"""Telegram alerting for Fabula Security Scanner.
+
+This module supports:
+- Detailed HTML-formatted Critical/High alerts.
+- Multiple destinations via TELEGRAM_CHAT_IDS.
+- Legacy TELEGRAM_CHAT_ID compatibility.
+- JSON and HTML report attachments.
+- Secret redaction in Telegram messages and temporary attachment copies.
+- CLI use by the CI/CD deployment script without running another scan.
+"""
+
+from __future__ import annotations
+
+import argparse
+import html
+import mimetypes
 import os
+import re
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Dict, List, Optional, Sequence
+
+import requests
 import yaml
-from datetime import datetime
-from typing import List, Dict, Optional
-import json
+
 
 class TelegramAlert:
-    def __init__(self, config_path: str = "config/default.yaml"):
-        """Initialize Telegram alert with credentials from config file"""
-        
-        # Load config from YAML
+    """Send Fabula security alerts and reports to one or more Telegram chats."""
+
+    _secret_pattern = re.compile(
+        r"(?ix)"
+        r"((?:\"|\b)(?:password|passwd|pass|token|secret|api[_-]?key|"
+        r"database[_-]?url|private[_-]?key|access[_-]?key|"
+        r"wordpress_db_password|mysql_password|postgres_password)"
+        r"(?:\"|\b)\s*[:=]\s*)"
+        r"(\"[^\"]*\"|'[^']*'|[^,\s}\n]+)"
+    )
+
+    def __init__(self, config_path: str = "config/default.yaml") -> None:
         self.config = self._load_config(config_path)
-        
-        # Get credentials from config (with fallback to environment variables)
-        telegram_config = self.config.get('telegram', {})
-        
-        self.bot_token = (
-            os.getenv('TELEGRAM_BOT_TOKEN') or 
-            telegram_config.get('bot_token')
+        telegram_config = self.config.get("telegram", {}) or {}
+
+        self.bot_token = os.getenv("TELEGRAM_BOT_TOKEN") or telegram_config.get("bot_token")
+
+        legacy_chat_id = os.getenv("TELEGRAM_CHAT_ID") or telegram_config.get("chat_id")
+        self.chat_id = str(legacy_chat_id).strip() if legacy_chat_id else None
+
+        configured_chat_ids = (
+            os.getenv("TELEGRAM_CHAT_IDS")
+            or telegram_config.get("chat_ids")
         )
-        
-        chat_id = (
-            os.getenv('TELEGRAM_CHAT_ID') or 
-            telegram_config.get('chat_id')
-        )
-        self.chat_id = str(chat_id).strip() if chat_id else None
-        
-        thread_id = (
-            os.getenv('TELEGRAM_THREAD_ID') or 
-            telegram_config.get('thread_id')
-        )
+        self.chat_ids = self._normalise_chat_ids(configured_chat_ids)
+        if not self.chat_ids and self.chat_id:
+            self.chat_ids = [self.chat_id]
+
+        thread_id = os.getenv("TELEGRAM_THREAD_ID") or telegram_config.get("thread_id")
         self.thread_id = str(thread_id).strip() if thread_id else None
-        
-        # Alert settings from config
-        self.alert_threshold = telegram_config.get('alert_threshold', 'HIGH')
-        self.include_critical = telegram_config.get('include_critical', True)
-        self.include_high = telegram_config.get('include_high', True)
-        self.include_medium = telegram_config.get('include_medium', False)
-        self.include_low = telegram_config.get('include_low', False)
-        self.include_info = telegram_config.get('include_info', False)
-        self.max_findings = telegram_config.get('max_findings_per_message', 10)
-        self.send_summary_always = telegram_config.get('send_summary_always', True)
-        self.show_description = telegram_config.get('show_description', True)
-        self.show_remediation = telegram_config.get('show_remediation', True)
-        self.show_module = telegram_config.get('show_module', True)
-        self.truncate_desc = telegram_config.get('truncate_description', 120)
-        
-        # Build API URL
-        self.api_url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage" if self.bot_token else None
-        self.api_photo = f"https://api.telegram.org/bot{self.bot_token}/sendPhoto" if self.bot_token else None
-        
-        # Multiple chat IDs support
-        chat_ids = telegram_config.get('chat_ids') or os.getenv('TELEGRAM_CHAT_IDS')
-        if chat_ids:
-            if isinstance(chat_ids, str):
-                self.chat_ids = [cid.strip() for cid in chat_ids.split(',')]
-            elif isinstance(chat_ids, list):
-                self.chat_ids = chat_ids
-            else:
-                self.chat_ids = [self.chat_id] if self.chat_id else []
-        else:
-            self.chat_ids = [self.chat_id] if self.chat_id else []
-    
-    def _load_config(self, config_path: str) -> Dict:
-        """Load YAML configuration file"""
+
+        self.include_critical = bool(telegram_config.get("include_critical", True))
+        self.include_high = bool(telegram_config.get("include_high", True))
+        self.include_medium = bool(telegram_config.get("include_medium", False))
+        self.include_low = bool(telegram_config.get("include_low", False))
+        self.include_info = bool(telegram_config.get("include_info", False))
+        self.max_findings = int(telegram_config.get("max_findings_per_message", 10))
+        self.send_summary_always = bool(telegram_config.get("send_summary_always", True))
+        self.truncate_desc = int(telegram_config.get("truncate_description", 700))
+        self.max_message_length = 3900
+
+        self.api_url = (
+            f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+            if self.bot_token
+            else None
+        )
+        self.api_document = (
+            f"https://api.telegram.org/bot{self.bot_token}/sendDocument"
+            if self.bot_token
+            else None
+        )
+
+    @staticmethod
+    def _normalise_chat_ids(value: object) -> List[str]:
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        if isinstance(value, (list, tuple)):
+            return [str(item).strip() for item in value if str(item).strip()]
+        return []
+
+    @staticmethod
+    def _load_config(config_path: str) -> Dict:
         try:
-            with open(config_path, 'r') as f:
-                return yaml.safe_load(f) or {}
+            with open(config_path, "r", encoding="utf-8") as handle:
+                return yaml.safe_load(handle) or {}
         except FileNotFoundError:
             print(f"⚠️ Config file {config_path} not found. Using defaults.")
             return {}
-        except yaml.YAMLError as e:
-            print(f"❌ Error parsing {config_path}: {e}")
+        except yaml.YAMLError as exc:
+            print(f"❌ Error parsing {config_path}: {exc}")
             return {}
-    
-    def _should_send_alert(self, findings: List[Dict]) -> bool:
-        """Check if findings meet alert threshold"""
-        if not findings:
-            return False
-        
-        allowed_severities = []
-        if self.include_critical:
-            allowed_severities.append('CRITICAL')
-        if self.include_high:
-            allowed_severities.append('HIGH')
-        if self.include_medium:
-            allowed_severities.append('MEDIUM')
-        if self.include_low:
-            allowed_severities.append('LOW')
-        if self.include_info:
-            allowed_severities.append('INFO')
-        
-        for f in findings:
-            sev = f.get('severity', '').upper()
-            if sev in allowed_severities:
-                return True
-        return False
 
-    def send_alert(self, findings: List[Dict], target: str):
-        """Send formatted alert to Telegram"""
-        
-        if not self.bot_token or not self.chat_ids:
-            print("⚠️ Telegram credentials not configured. Skipping alerts.")
-            return
-        
-        # Filter findings based on config
-        allowed_severities = []
-        if self.include_critical: allowed_severities.append('CRITICAL')
-        if self.include_high: allowed_severities.append('HIGH')
-        if self.include_medium: allowed_severities.append('MEDIUM')
-        if self.include_low: allowed_severities.append('LOW')
-        if self.include_info: allowed_severities.append('INFO')
-        
-        filtered = [f for f in findings if f.get('severity', '').upper() in allowed_severities]
-        
-        if not filtered:
-            # Still send summary if configured
-            if self.send_summary_always:
-                self.send_summary(findings, target)
-            return
-        
-        # Build message
-        message = self._build_message(filtered, target)
-        
-        # Send to all chat IDs
-        for chat_id in self.chat_ids:
-            if not chat_id:
-                continue
-            
-            payload = {
-                'chat_id': chat_id.strip(),
-                'text': message,
-                'parse_mode': 'HTML',
-                'disable_web_page_preview': True
-            }
-            
-            if self.thread_id:
-                try:
-                    payload['message_thread_id'] = int(self.thread_id)
-                except ValueError:
-                    print(f"⚠️ Invalid thread_id: {self.thread_id}")
-            
+    @classmethod
+    def redact_secrets(cls, value: object) -> str:
+        """Redact common credential values before Telegram delivery."""
+        text = str(value or "")
+        return cls._secret_pattern.sub(r"\1[REDACTED]", text)
+
+    @classmethod
+    def _escape(cls, value: object) -> str:
+        return html.escape(cls.redact_secrets(value), quote=False)
+
+    @staticmethod
+    def _severity_counts(findings: Sequence[Dict]) -> Dict[str, int]:
+        counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
+        for finding in findings:
+            severity = str(finding.get("severity", "INFO")).upper()
+            if severity in counts:
+                counts[severity] += 1
+        return counts
+
+    def _allowed_severities(self) -> set[str]:
+        allowed = set()
+        if self.include_critical:
+            allowed.add("CRITICAL")
+        if self.include_high:
+            allowed.add("HIGH")
+        if self.include_medium:
+            allowed.add("MEDIUM")
+        if self.include_low:
+            allowed.add("LOW")
+        if self.include_info:
+            allowed.add("INFO")
+        return allowed
+
+    def _message_payload(self, chat_id: str, message: str) -> Dict[str, object]:
+        payload: Dict[str, object] = {
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        }
+        if self.thread_id:
             try:
-                response = requests.post(self.api_url, data=payload, timeout=10)
-                if response.status_code == 200:
+                payload["message_thread_id"] = int(self.thread_id)
+            except ValueError:
+                print(f"⚠️ Invalid Telegram thread ID: {self.thread_id}")
+        return payload
+
+    def _document_payload(self, chat_id: str, caption: str) -> Dict[str, object]:
+        payload: Dict[str, object] = {
+            "chat_id": chat_id,
+            "caption": self._escape(caption),
+        }
+        if self.thread_id:
+            try:
+                payload["message_thread_id"] = int(self.thread_id)
+            except ValueError:
+                pass
+        return payload
+
+    def _send_message_to_all(self, message: str) -> bool:
+        if not self.api_url or not self.chat_ids:
+            print("⚠️ Telegram credentials or destinations are not configured.")
+            return False
+
+        success = True
+        for chat_id in self.chat_ids:
+            try:
+                response = requests.post(
+                    self.api_url,
+                    data=self._message_payload(chat_id, message),
+                    timeout=15,
+                )
+                if response.ok:
                     print(f"✅ Telegram alert sent to {chat_id}")
                 else:
-                    print(f"❌ Failed to send Telegram alert to {chat_id}: {response.text}")
-            except Exception as e:
-                print(f"❌ Telegram send failed: {e}")
+                    print(f"❌ Telegram alert failed for {chat_id}: {response.text}")
+                    success = False
+            except requests.RequestException as exc:
+                print(f"❌ Telegram alert failed for {chat_id}: {exc}")
+                success = False
+        return success
 
-    def _build_message(self, findings: List[Dict], target: str) -> str:
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    def _redacted_copy(self, path: Path) -> tuple[Path, str]:
+        source = path.read_text(encoding="utf-8", errors="replace")
+        redacted = self.redact_secrets(source)
+        suffix = path.suffix or ".txt"
+        handle = tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            suffix=suffix,
+            prefix="fabula-telegram-",
+            delete=False,
+        )
+        try:
+            handle.write(redacted)
+            temporary_path = Path(handle.name)
+        finally:
+            handle.close()
+        return temporary_path, path.name
 
-        severity_counts = {
-            'CRITICAL': len([f for f in findings if f.get('severity', '').upper() == 'CRITICAL']),
-            'HIGH': len([f for f in findings if f.get('severity', '').upper() == 'HIGH']),
-            'MEDIUM': len([f for f in findings if f.get('severity', '').upper() == 'MEDIUM']),
-            'LOW': len([f for f in findings if f.get('severity', '').upper() == 'LOW']),
-            'INFO': len([f for f in findings if f.get('severity', '').upper() == 'INFO'])
-        }
-        total = len(findings)
+    def _send_document_to_all(self, path: Optional[str], caption: str) -> bool:
+        if not path:
+            return True
+        report_path = Path(path)
+        if not report_path.is_file() or not self.api_document:
+            return True
 
-        thick_line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        thin_line  = "───────────────────────────"
+        temporary_path, original_name = self._redacted_copy(report_path)
+        success = True
+        mime_type = mimetypes.guess_type(original_name)[0] or "application/octet-stream"
 
-        has_critical = severity_counts['CRITICAL'] > 0
-        has_high = severity_counts['HIGH'] > 0
+        try:
+            for chat_id in self.chat_ids:
+                try:
+                    with temporary_path.open("rb") as handle:
+                        response = requests.post(
+                            self.api_document,
+                            data=self._document_payload(chat_id, caption),
+                            files={
+                                "document": (
+                                    original_name,
+                                    handle,
+                                    mime_type,
+                                )
+                            },
+                            timeout=45,
+                        )
+                    if response.ok:
+                        print(f"✅ Telegram document sent to {chat_id}: {original_name}")
+                    else:
+                        print(
+                            f"❌ Telegram document failed for {chat_id}: "
+                            f"{response.text}"
+                        )
+                        success = False
+                except requests.RequestException as exc:
+                    print(f"❌ Telegram document failed for {chat_id}: {exc}")
+                    success = False
+        finally:
+            temporary_path.unlink(missing_ok=True)
 
-        header_icon = '🔴' if has_critical else ('🟠' if has_high else '🟡')
+        return success
 
-        message = f"""{header_icon} <b>FABULA SECURITY SCANNER ALERT</b>
- {thick_line}
+    def _build_message(
+        self,
+        findings: Sequence[Dict],
+        target: str,
+        detail_findings: Optional[Sequence[Dict]] = None,
+    ) -> str:
+        all_findings = list(findings)
+        displayed_findings = list(detail_findings or all_findings)
+        counts = self._severity_counts(all_findings)
+        total = len(all_findings)
+        scanned_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        header_icon = "🔴" if counts["CRITICAL"] else ("🟠" if counts["HIGH"] else "🟡")
+        thick_line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        thin_line = "──────────────────────────"
 
- 🎯 <b>Target:</b> <code>{target}</code>
- 🕒 <b>Scanned At:</b> {timestamp}
+        message = (
+            f"{header_icon} <b>FABULA SECURITY SCANNER ALERT</b>\n"
+            f"{thick_line}\n"
+            f"🎯 <b>Target:</b> <code>{self._escape(target)}</code>\n"
+            f"🕒 <b>Scanned At:</b> {scanned_at}\n\n"
+            f"📊 <b>Vulnerability Summary:</b>\n"
+            f"• 🔴 CRITICAL: {counts['CRITICAL']}\n"
+            f"• 🟠 HIGH:     {counts['HIGH']}\n"
+            f"• 🟡 MEDIUM:   {counts['MEDIUM']}\n"
+            f"• 🔵 LOW:      {counts['LOW']}\n"
+            f"• ℹ️ INFO:     {counts['INFO']}\n"
+            f"• <b>TOTAL:</b> {total}\n"
+            f"{thick_line}\n"
+        )
 
- 📊 <b>Vulnerability Summary:</b>
- • 🔴 CRITICAL: {severity_counts['CRITICAL']}
- • 🟠 HIGH:     {severity_counts['HIGH']}
- • 🟡 MEDIUM:   {severity_counts['MEDIUM']}
- • 🔵 LOW:      {severity_counts['LOW']}
- • ℹ️ INFO:     {severity_counts['INFO']}
- • <b>TOTAL:</b> {total}
- {thick_line}
-"""
+        for index, finding in enumerate(displayed_findings[: self.max_findings], 1):
+            severity = str(finding.get("severity", "INFO")).upper()
+            icon = {
+                "CRITICAL": "🔴",
+                "HIGH": "🟠",
+                "MEDIUM": "🟡",
+                "LOW": "🔵",
+            }.get(severity, "ℹ️")
+            title = self._escape(finding.get("title", "Unknown"))
+            module = self._escape(finding.get("module", "Unknown"))
+            details = (
+                finding.get("description")
+                or finding.get("details")
+                or finding.get("evidence")
+                or "Not provided."
+            )
+            details = self.redact_secrets(details)
+            if self.truncate_desc and len(details) > self.truncate_desc:
+                details = details[: self.truncate_desc] + "\n… (truncated; see attached report)"
+            remediation = self._escape(
+                finding.get("remediation", "Remediation not specified.")
+            )
 
-        for idx, f in enumerate(findings[:self.max_findings], 1):
-            severity = f.get('severity', 'INFO').upper()
-            severity_icon = '🔴' if severity == 'CRITICAL' else ('🟠' if severity == 'HIGH' else ('🟡' if severity == 'MEDIUM' else ('🔵' if severity == 'LOW' else 'ℹ️')))
+            message += (
+                f"{icon} <b>#{index} - {self._escape(severity)}</b>\n"
+                f"<b>Title:</b> {title}\n"
+                f"<b>Module:</b> {module}\n"
+                f"<b>Details:</b> {html.escape(str(details), quote=False)}\n"
+                f"<b>Remediation:</b> {remediation}\n"
+                f"{thin_line}\n"
+            )
 
-            title = f.get('title', 'Unknown')
-            module = f.get('module', 'Unknown')
+        if len(displayed_findings) > self.max_findings:
+            message += (
+                f"… and {len(displayed_findings) - self.max_findings} more findings. "
+                "See the attached JSON/HTML reports.\n"
+            )
 
-            details_raw = f.get('description', '') or f.get('details', '') or f.get('evidence', '') or ''
-            if self.truncate_desc and len(details_raw) > self.truncate_desc:
-                details_raw = details_raw[:self.truncate_desc] + '\n... (truncated)'
+        message += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ <b>ACTION REQUIRED:</b> Investigate vulnerabilities immediately!"
 
-            remediation_raw = f.get('remediation', 'Remediation not specified.')
-
-            block = f"""
-{severity_icon} <b>#{idx} - {severity}</b>
- <b>Title:</b> {title}
- <b>Module:</b> {module}
- <b>Details:</b>
- {details_raw}
- <b>Remediation:</b> {remediation_raw}
- {thin_line}
-"""
-            message += block
-
-        if len(findings) > self.max_findings:
-            message += f"\n... and {len(findings) - self.max_findings} more findings — see full JSON / HTML reports."
-
-        message += f"""
- {thick_line}
- ⚠️ <b>ACTION REQUIRED:</b> Investigate vulnerabilities immediately!"""
-
+        if len(message) > self.max_message_length:
+            message = message[: self.max_message_length - 70]
+            message += "\n… Message shortened; see attached JSON/HTML reports."
         return message
 
-    def _build_inline_keyboard(self) -> Dict:
-        """Build inline buttons for quick actions"""
-        return {
-            'inline_keyboard': [
-                [
-                    {'text': '📊 View Full Report', 'url': 'https://your-vps-ip/reports/latest.html'},
-                    {'text': '📥 Download JSON', 'url': 'https://your-vps-ip/reports/latest.json'}
-                ],
-                [
-                    {'text': '🔄 Re-scan Now', 'callback_data': 'rescan'},
-                    {'text': '✅ Acknowledge', 'callback_data': 'acknowledge'}
-                ],
-                [
-                    {'text': '📋 View All Findings', 'callback_data': 'view_all'}
-                ]
-            ]
-        }
-
-    def send_summary(self, findings: List[Dict], target: str):
-        """Send a quick summary (for low-severity scans)"""
+    def send_alert(
+        self,
+        findings: List[Dict],
+        target: str,
+        json_path: Optional[str] = None,
+        html_path: Optional[str] = None,
+    ) -> bool:
+        """Send a detailed alert and optional redacted report attachments."""
         if not self.bot_token or not self.chat_ids:
-            return
+            print("⚠️ Telegram credentials not configured. Skipping alerts.")
+            return False
 
+        allowed = self._allowed_severities()
+        detail_findings = [
+            finding
+            for finding in findings
+            if str(finding.get("severity", "INFO")).upper() in allowed
+        ]
+        if not detail_findings:
+            if self.send_summary_always:
+                return self.send_summary(findings, target)
+            return True
+
+        message = self._build_message(findings, target, detail_findings)
+        success = self._send_message_to_all(message)
+        success = self._send_document_to_all(
+            json_path,
+            "Fabula JSON security report — sensitive values redacted",
+        ) and success
+        success = self._send_document_to_all(
+            html_path,
+            "Fabula HTML security report — sensitive values redacted",
+        ) and success
+        return success
+
+    def send_summary(self, findings: List[Dict], target: str) -> bool:
+        """Send a summary for scans without configured alert-level findings."""
+        if not self.bot_token or not self.chat_ids:
+            return False
+
+        counts = self._severity_counts(findings)
         total = len(findings)
-
-        severity_counts = {
-            'CRITICAL': 0,
-            'HIGH': 0,
-            'MEDIUM': 0,
-            'LOW': 0,
-            'INFO': 0
-        }
-
-        for f in findings:
-            sev = f.get('severity', 'info').upper()
-            if sev in severity_counts:
-                severity_counts[sev] += 1
-
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-        thick_line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-        if total == 0:
-            message = f"""✅ <b>FABULA SCANNER — CLEAN</b>
- {thick_line}
-
- 🎯 <b>Target:</b> <code>{target}</code>
- 🕒 <b>Scanned At:</b> {timestamp}
-
- ✅ No vulnerabilities found.
- ✅ Happy scanning! 🎉
-"""
-        else:
-            message = f"""📊 <b>FABULA SCANNER — SUMMARY</b>
- {thick_line}
-
- 🎯 <b>Target:</b> <code>{target}</code>
- 🕒 <b>Scanned At:</b> {timestamp}
-
- 📊 <b>Vulnerability Summary:</b>
- • 🔴 CRITICAL: {severity_counts['CRITICAL']}
- • 🟠 HIGH:     {severity_counts['HIGH']}
- • 🟡 MEDIUM:   {severity_counts['MEDIUM']}
- • 🔵 LOW:      {severity_counts['LOW']}
- • ℹ️ INFO:     {severity_counts['INFO']}
- • <b>TOTAL:</b> {total}
-"""
-
-        for chat_id in self.chat_ids:
-            if not chat_id:
-                continue
-
-            payload = {
-                'chat_id': chat_id.strip(),
-                'text': message,
-                'parse_mode': 'HTML',
-                'disable_web_page_preview': True,
-            }
-
-            if self.thread_id:
-                try:
-                    payload['message_thread_id'] = int(self.thread_id)
-                except ValueError:
-                    pass
-
-            try:
-                requests.post(self.api_url, data=payload, timeout=10)
-                print(f"✅ Telegram summary sent to {chat_id}")
-            except Exception as e:
-                print(f"❌ Telegram summary failed: {e}")
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        thick_line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        message = (
+            f"✅ <b>FABULA SECURITY SCANNER SUMMARY</b>\n"
+            f"{thick_line}\n"
+            f"🎯 <b>Target:</b> <code>{self._escape(target)}</code>\n"
+            f"🕒 <b>Scanned At:</b> {timestamp}\n\n"
+            f"📊 <b>Vulnerability Summary:</b>\n"
+            f"• 🔴 CRITICAL: {counts['CRITICAL']}\n"
+            f"• 🟠 HIGH:     {counts['HIGH']}\n"
+            f"• 🟡 MEDIUM:   {counts['MEDIUM']}\n"
+            f"• 🔵 LOW:      {counts['LOW']}\n"
+            f"• ℹ️ INFO:     {counts['INFO']}\n"
+            f"• <b>TOTAL:</b> {total}\n"
+            f"{thick_line}\n"
+            "✅ No Critical or High findings detected."
+        )
+        return self._send_message_to_all(message)
 
 
+def send_report_from_file(
+    report_path: str,
+    html_report_path: Optional[str],
+    target: Optional[str],
+    config_path: str,
+) -> int:
+    """Send a saved JSON report without running another scan."""
+    with open(report_path, "r", encoding="utf-8") as handle:
+        report = yaml.safe_load(handle) if report_path.endswith((".yaml", ".yml")) else None
+    if report is None:
+        import json
 
+        with open(report_path, "r", encoding="utf-8") as handle:
+            report = json.load(handle)
+
+    findings = report.get("findings", [])
+    destination = target or report.get("target", "Unknown")
+    alert = TelegramAlert(config_path)
+    blocking = any(
+        str(finding.get("severity", "")).upper() in {"CRITICAL", "HIGH"}
+        for finding in findings
+    )
+
+    if blocking:
+        delivered = alert.send_alert(
+            findings,
+            destination,
+            json_path=report_path,
+            html_path=html_report_path,
+        )
+    else:
+        delivered = alert.send_summary(findings, destination)
+
+    return 0 if delivered else 1
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Send a saved Fabula report to Telegram")
+    parser.add_argument("--report", required=True, help="Saved JSON report path")
+    parser.add_argument("--html-report", help="Saved HTML report path")
+    parser.add_argument("--target", help="Target URL override")
+    parser.add_argument("--config", default="config/default.yaml")
+    args = parser.parse_args()
+    return send_report_from_file(args.report, args.html_report, args.target, args.config)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

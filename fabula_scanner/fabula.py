@@ -220,42 +220,57 @@ def generate_html(results, output_path):
         f.write(html)
     console.print(f"[green]✅ HTML report saved to: {output_path}[/green]")
 
-def send_telegram_alerts(findings: list, target: str, config_path: str = "config/default.yaml"):
-    """
-    Send Telegram alerts for HIGH/CRITICAL findings or summary.
-    Reads credentials from config file.
-    """
+def send_telegram_alerts(
+    findings: list,
+    target: str,
+    config_path: str = "config/default.yaml",
+    json_path: str | None = None,
+    html_path: str | None = None,
+):
+    """Send a detailed alert or summary after reports have been saved."""
     try:
-        # Initialize Telegram with config path
         telegram = TelegramAlert(config_path)
-        
-        # Check if Telegram is enabled
         config = load_config(config_path)
-        telegram_enabled = config.get('telegram', {}).get('enabled', True)
-        
+        telegram_enabled = config.get("telegram", {}).get("enabled", True)
+
         if not telegram_enabled:
             console.print("[yellow]ℹ️ Telegram alerts disabled in config.[/yellow]")
             return False
-        
-        # Check for HIGH/CRITICAL
-        high_findings = [f for f in findings if f.get('severity', '').upper() in ['HIGH', 'CRITICAL']]
-        
-        if high_findings:
-            # Send alert with details
-            telegram.send_alert(high_findings, target)
-            console.print("[red]🚨 HIGH/CRITICAL findings! Telegram alert sent.[/red]")
-            return True  # Indicates alert was sent
-        else:
-            # Send clean summary
-            telegram.send_summary(findings, target)
+
+        has_high_or_critical = any(
+            str(finding.get("severity", "")).upper() in {"HIGH", "CRITICAL"}
+            for finding in findings
+        )
+
+        if has_high_or_critical:
+            delivered = telegram.send_alert(
+                findings,
+                target,
+                json_path=json_path,
+                html_path=html_path,
+            )
+            if delivered:
+                console.print(
+                    "[red]🚨 HIGH/CRITICAL findings! Telegram alert and reports sent.[/red]"
+                )
+            else:
+                console.print(
+                    "[yellow]⚠️ Findings detected, but Telegram delivery was incomplete.[/yellow]"
+                )
+            return True
+
+        delivered = telegram.send_summary(findings, target)
+        if delivered:
             console.print("[green]✅ No HIGH/CRITICAL findings. Telegram summary sent.[/green]")
-            return False
-    
+        else:
+            console.print("[yellow]⚠️ Telegram summary delivery was incomplete.[/yellow]")
+        return False
+
     except ImportError:
         console.print("[yellow]⚠️ Telegram module not found. Skipping Telegram alerts.[/yellow]")
-    except Exception as e:
-        console.print(f"[yellow]⚠️ Telegram alert failed: {e}[/yellow]")
-    
+    except Exception as exc:
+        console.print(f"[yellow]⚠️ Telegram alert failed: {exc}[/yellow]")
+
     return False
 
 def main():
@@ -318,32 +333,34 @@ def main():
     results['timestamp'] = datetime.now().isoformat()
     results['target'] = target
 
-    # ─── Telegram Alerts ──────────────────────────────────────────
-    if not args.no_telegram:
-        has_critical = send_telegram_alerts(
-            results.get('findings', []),
-            target,
-            args.config  # Pass config path
-        )
+    # ─── Save reports before Telegram delivery ────────────────────
+    json_path = None
+    html_path = None
 
-        # If CRITICAL found, exit with error code for CI/CD
-        if has_critical:
-            console.print("[red]❌ Scan failed due to CRITICAL vulnerabilities.[/red]")
-            # Still save reports before exiting
-        # Don't exit yet - we still want to save reports
-    else:
-        console.print("[yellow]ℹ️ Telegram alerts disabled via --no-telegram[/yellow]")
-
-    # ─── Save reports ─────────────────────────────────────────────
     if args.format in ('json', 'both'):
         json_path = f"{args.output}.json"
-        with open(json_path, 'w') as f:
-            json.dump(results, f, indent=2)
+        with open(json_path, 'w', encoding='utf-8') as handle:
+            json.dump(results, handle, indent=2)
         console.print(f"[green]✅ JSON report saved to: {json_path}[/green]")
 
     if args.format in ('html', 'both'):
         html_path = f"{args.output}.html"
         generate_html(results, html_path)
+
+    # ─── Telegram Alerts after reports exist ───────────────────────
+    if not args.no_telegram:
+        has_critical = send_telegram_alerts(
+            results.get('findings', []),
+            target,
+            args.config,
+            json_path=json_path,
+            html_path=html_path,
+        )
+
+        if has_critical:
+            console.print("[red]❌ Scan contains HIGH/CRITICAL findings.[/red]")
+    else:
+        console.print("[yellow]ℹ️ Telegram alerts disabled via --no-telegram[/yellow]")
 
     # ─── Final Summary ────────────────────────────────────────────
     summary = results['summary']

@@ -4,7 +4,8 @@
 # IMPORTANT: Do not commit credentials to git!
 # Use environment variables instead:
 #   - TELEGRAM_BOT_TOKEN
-#   - TELEGRAM_CHAT_ID
+#   - TELEGRAM_CHAT_IDS (comma-separated private chat and team group IDs)
+#   - TELEGRAM_CHAT_ID (legacy single-destination fallback)
 
 timeout: 5
 # Wordlist for directory brute force
@@ -26,10 +27,10 @@ telegram:
   # Bot credentials (use environment variables in production!)
   # Set these as environment variables:
   #   TELEGRAM_BOT_TOKEN=your-token-here
-  #   TELEGRAM_CHAT_ID=your-chat-id-here
+  #   TELEGRAM_CHAT_IDS=private-chat-id,private-group-id
   # Or set in fabula_scanner/.env file
   bot_token: ${TELEGRAM_BOT_TOKEN}
-  chat_id: ${TELEGRAM_CHAT_ID}
+  chat_ids: ${TELEGRAM_CHAT_IDS}
   
   # Alert settings
   enabled: true
@@ -45,5 +46,5 @@ telegram:
   show_remediation: true
   show_module: true
   max_findings_per_message: 10
-  truncate_description: 120
-  send_summary_always: true
+  truncate_description: 700
+  send_summary_always: false
