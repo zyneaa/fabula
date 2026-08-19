@@ -12,12 +12,14 @@ class ScannerModule(ABC):
     def scan(self):
         pass
 
-    def add_finding(self, severity, title, description, remediation=""):
+    def add_finding(self, severity, title, description, remediation="", **extra):
         finding = {
             "severity": severity,
             "title": title,
+            "module": extra.pop("module", self.name),
             "description": description,
-            "remediation": remediation
+            "remediation": remediation,
+            **extra,
         }
         self.findings.append(finding)
         # Print live feedback (optional)

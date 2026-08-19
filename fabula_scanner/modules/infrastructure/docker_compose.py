@@ -92,19 +92,24 @@ class DockerComposeCheck(ScannerModule):
                         found_credentials.append(credential_type)
                         break
 
+            evidence = content[:12000]
             if found_credentials:
                 self.add_finding(
                     "critical",
                     f"EXPOSED DOCKER COMPOSE WITH CREDENTIALS: {path}",
-                    f"Found {len(found_credentials)} credential type(s) in an accessible Compose file.",
+                    f"Status code {response.status_code}. Found {len(found_credentials)} credential type(s) in an accessible Compose file.",
                     "Remove the file from public access immediately and rotate every exposed credential.",
+                    module=self.name,
+                    evidence=evidence,
                 )
             else:
                 self.add_finding(
                     "high",
                     f"EXPOSED DOCKER COMPOSE FILE: {path}",
-                    "A real Docker Compose document is publicly accessible.",
+                    f"Status code {response.status_code}. A real Docker Compose document is publicly accessible.",
                     "Restrict access to Compose files and keep secrets outside web-accessible directories.",
+                    module=self.name,
+                    evidence=evidence,
                 )
 
         return self.findings

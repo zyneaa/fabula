@@ -438,8 +438,8 @@ jobs:
           critical = counts["critical"]
           high = counts["high"]
           icon = "🔴" if critical else ("🟠" if high else "🟡")
-          thick = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          thin = "──────────────────────────"
+          thick = "━━━━━━━━━━━━━━━━━━━━━━━━"
+          thin = "────────────────────"
           lines = [
               f"{icon} <b>FABULA SECURITY SCANNER ALERT</b>",
               thick,
@@ -456,7 +456,8 @@ jobs:
               thick,
           ]
 
-          for index, finding in enumerate(findings[:10], 1):
+          visible_findings = findings[:10]
+          for index, finding in enumerate(visible_findings, 1):
               severity = str(finding.get("severity", "INFO")).upper()
               severity_icon = {
                   "CRITICAL": "🔴",
@@ -473,14 +474,24 @@ jobs:
               details = redact(details)
               if len(details) > 700:
                   details = details[:700] + "\\n… (truncated; see attached report)"
+              details_markup = html.escape(details, quote=False)
+              evidence = finding.get("evidence")
+              if evidence:
+                  evidence_text = redact(evidence)[:2800]
+                  details_markup += (
+                      "\\n\\n<pre>"
+                      + html.escape(evidence_text, quote=False)
+                      + "</pre>"
+                  )
               lines.extend([
                   f"{severity_icon} <b>#{index} - {esc(severity)}</b>",
                   f"<b>Title:</b> {esc(finding.get('title', 'Unknown'))}",
                   f"<b>Module:</b> {esc(finding.get('module', 'Unknown'))}",
-                  f"<b>Details:</b> {html.escape(details, quote=False)}",
+                  f"<b>Details:</b> {details_markup}",
                   f"<b>Remediation:</b> {esc(finding.get('remediation', 'Remediation not specified.'))}",
-                  thin,
               ])
+              if index < len(visible_findings):
+                  lines.append(thin)
 
           if len(findings) > 10:
               lines.append(f"… and {len(findings) - 10} more findings. See attached JSON/HTML reports.")
