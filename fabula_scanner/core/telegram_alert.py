@@ -253,8 +253,8 @@ class TelegramAlert:
         total = len(all_findings)
         scanned_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         header_icon = "🔴" if counts["CRITICAL"] else ("🟠" if counts["HIGH"] else "🟡")
-        thick_line = "━━━━━━━━━━━━━━━━━━━━━━━━"
-        thin_line = "────────────────────"
+        thick_line = "━━━━━━━━━━━━━━━━━"
+        thin_line = "────────────"
 
         message = (
             f"{header_icon} <b>FABULA SECURITY SCANNER ALERT</b>\n"
@@ -320,7 +320,7 @@ class TelegramAlert:
                 "See the attached JSON/HTML reports.\n"
             )
 
-        message += "━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ <b>ACTION REQUIRED:</b> Investigate vulnerabilities immediately!"
+        message += f"{thick_line}\n⚠️ <b>ACTION REQUIRED:</b> Investigate vulnerabilities immediately!"
 
         if len(message) > self.max_message_length:
             message = message[: self.max_message_length - 70]
@@ -370,7 +370,7 @@ class TelegramAlert:
         counts = self._severity_counts(findings)
         total = len(findings)
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-        thick_line = "━━━━━━━━━━━━━━━━━━━━━━━━"
+        thick_line = "━━━━━━━━━━━━━━━━━"
         message = (
             f"✅ <b>FABULA SECURITY SCANNER SUMMARY</b>\n"
             f"{thick_line}\n"

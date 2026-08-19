@@ -438,8 +438,8 @@ jobs:
           critical = counts["critical"]
           high = counts["high"]
           icon = "🔴" if critical else ("🟠" if high else "🟡")
-          thick = "━━━━━━━━━━━━━━━━━━━━━━━━"
-          thin = "────────────────────"
+          thick = "━━━━━━━━━━━━━━━━━"
+          thin = "────────────"
           lines = [
               f"{icon} <b>FABULA SECURITY SCANNER ALERT</b>",
               thick,
