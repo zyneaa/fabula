@@ -676,7 +676,7 @@ export default function Chat() {
                 <FileQuestion size={18} />
               </div>
               <div className="flex flex-col">
-                <span className="font-body text-sm font-semibold text-on-surface">Create Quiz</span>
+                <span className="font-body text-sm font-semibold text-on-surface">Generate Quiz</span>
                 <span className="font-mono text-[11px] font-medium text-on-surface-variant">Test your knowledge</span>
               </div>
             </div>
