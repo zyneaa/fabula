@@ -188,7 +188,8 @@ async def generate_full_papers(
     def read_material(mat: Material) -> str:
         try:
             return parse_file(mat.file_path)
-        except Exception:
+        except (ValueError, OSError):
+            logger.warning("Failed to parse material file", material_id=mat.id, path=mat.file_path)
             return ""
 
     materials_content = []
