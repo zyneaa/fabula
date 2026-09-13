@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +29,7 @@ class MaterialResponse(BaseModel):
     id: int
     title: str
     file_type: str
+    kind: str = "material"
     status: MaterialStatus
     uploaded_at: str
 
@@ -75,6 +76,7 @@ async def process_material(material_id: int, file_path: str):
 async def upload_material_standalone(
     background_tasks: BackgroundTasks,
     file: UploadFile = Depends(get_upload_file),
+    kind: str = Form("material"),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -84,6 +86,8 @@ async def upload_material_standalone(
     ext = Path(filename).suffix.lower()
     if ext not in ALLOWED_TYPES:
         raise BadRequestException(f"Unsupported file type: {ext}")
+    if kind not in ("material", "example"):
+        raise BadRequestException("kind must be 'material' or 'example'")
 
     content = await file.read()
     max_size = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
@@ -101,6 +105,7 @@ async def upload_material_standalone(
         title=file.filename,
         file_path=str(file_path),
         file_type=ext[1:],
+        kind=kind,
         status=MaterialStatus.pending,
     )
     db.add(material)
@@ -113,6 +118,7 @@ async def upload_material_standalone(
         id=material.id,
         title=material.title,
         file_type=material.file_type,
+        kind=material.kind,
         status=material.status,
         uploaded_at=material.uploaded_at.isoformat(),
     )
@@ -234,6 +240,7 @@ async def list_user_materials(
             id=m.id,
             title=m.title,
             file_type=m.file_type,
+            kind=m.kind,
             status=m.status,
             uploaded_at=m.uploaded_at.isoformat(),
         )

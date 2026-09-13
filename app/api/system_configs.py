@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.dependencies import require_role
 from app.models.system_config import SystemConfig
@@ -20,8 +21,17 @@ class SystemConfigResponse(BaseModel):
     frequency_penalty: float = 0.0
     presence_penalty: float = 0.0
     max_tokens: int = 100000
+    effective_model_name: str = ""
+    is_using_default_model: bool = True
 
     model_config = {"from_attributes": True}
+
+
+def _with_effective(config: SystemConfig) -> SystemConfigResponse:
+    data = SystemConfigResponse.model_validate(config)
+    data.effective_model_name = config.model_name or settings.DEFAULT_LLM_MODEL
+    data.is_using_default_model = not config.model_name
+    return data
 
 
 class SystemConfigUpdate(BaseModel):
@@ -52,7 +62,7 @@ async def get_system_config(
     _user: User = Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     config = await get_or_create_config(db)
-    return config
+    return _with_effective(config)
 
 
 @router.put("", response_model=SystemConfigResponse)
@@ -80,4 +90,4 @@ async def update_system_config(
         config.max_tokens = req.max_tokens
     await db.commit()
     await db.refresh(config)
-    return config
+    return _with_effective(config)

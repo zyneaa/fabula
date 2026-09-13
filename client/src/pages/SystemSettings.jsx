@@ -79,6 +79,15 @@ export default function SystemSettings() {
               placeholder="e.g. openai/gpt-4o"
             />
             <p className="font-mono text-[11px] font-medium text-on-surface-variant mt-1.5">This model is used by teachers, admins.</p>
+            {config.effective_model_name && (
+              <div className={`mt-3 px-3 py-2.5 rounded-lg font-mono text-xs ${config.is_using_default_model ? 'bg-tertiary-container text-on-tertiary-container' : 'bg-primary-container text-on-primary-container'}`}>
+                <span className="font-semibold">Currently active model: </span>
+                {config.effective_model_name}
+                {config.is_using_default_model && (
+                  <span className="opacity-80"> — falling back to DEFAULT_LLM_MODEL (no model set above)</span>
+                )}
+              </div>
+            )}
           </div>
 
           <div>

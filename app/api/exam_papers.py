@@ -4,14 +4,14 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import BadRequestException, NotFoundException
 from app.database import get_db
 from app.dependencies import require_role
 from app.models.exam_paper import ExamPaper
 from app.models.user import User, UserRole
 from app.services.exam_paper import (
     generate_exam_papers,
-    generate_questions_from_materials,
+    generate_full_papers,
 )
 
 logger = structlog.get_logger()
@@ -27,7 +27,8 @@ class GenerateExamPapersRequest(BaseModel):
 
 class GenerateQuestionsRequest(BaseModel):
     material_ids: list[int]
-    source_exam_id: int | None = None
+    example_material_ids: list[int] = []
+    num_papers: int = 3
 
 
 async def generate_exam_papers_background(
@@ -87,22 +88,23 @@ async def generate_questions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
 ):
-    content = await generate_questions_from_materials(
-        req.material_ids, req.source_exam_id, current_user.id, db
-    )
-    paper = ExamPaper(
-        course_id="generated",
-        teacher_id=current_user.id,
-        paper_number=1,
-        content=content,
-    )
-    db.add(paper)
-    await db.commit()
-    await db.refresh(paper)
+    """Generate full 100-mark exam papers (num_papers, default 3) directly from the files."""
+    try:
+        papers = await generate_full_papers(
+            req.material_ids, req.example_material_ids, current_user.id, db, req.num_papers
+        )
+    except ValueError as e:
+        raise BadRequestException(str(e)) from e
     return {
-        "id": paper.id,
-        "content": content,
-        "created_at": paper.created_at.isoformat(),
+        "papers": [
+            {
+                "id": p.id,
+                "paper_number": p.paper_number,
+                "content": p.content,
+                "created_at": p.created_at.isoformat(),
+            }
+            for p in papers
+        ]
     }
 
 

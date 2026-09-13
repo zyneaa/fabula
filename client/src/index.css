@@ -344,3 +344,23 @@ body {
   50% { transform: translate(-30px, -10px); }
   75% { transform: translate(10px, -20px); }
 }
+
+@media print {
+  body * { visibility: hidden; }
+  #exam-paper-print, #exam-paper-print * { visibility: visible; }
+  #exam-paper-print {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+    color: black !important;
+    padding: 0;
+  }
+  #exam-paper-print .markdown-content h1,
+  #exam-paper-print .markdown-content h2,
+  #exam-paper-print .markdown-content h3 { page-break-after: avoid; }
+  #exam-paper-print .markdown-content pre,
+  #exam-paper-print .markdown-content blockquote { page-break-inside: avoid; }
+}

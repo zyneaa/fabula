@@ -25,6 +25,7 @@ class Material(Base):
     title: Mapped[str] = mapped_column(String(255))
     file_path: Mapped[str] = mapped_column(String(512))
     file_type: Mapped[str] = mapped_column(String(10))
+    kind: Mapped[str] = mapped_column(String(20), default="material")
     status: Mapped[MaterialStatus] = mapped_column(
         Enum(MaterialStatus), default=MaterialStatus.pending
     )

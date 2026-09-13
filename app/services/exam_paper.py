@@ -171,45 +171,95 @@ Make this paper unique and different from other papers you might generate.""",
     return papers
 
 
-async def generate_questions_from_materials(
+async def generate_full_papers(
     material_ids: list[int],
-    source_exam_id: int | None,
+    example_material_ids: list[int],
     teacher_id: int,
     db: AsyncSession,
-) -> str:
+    num_papers: int = 3,
+) -> list[ExamPaper]:
+    """Generate full 100-mark exam papers directly from the uploaded files.
+
+    Sends the raw extracted file text straight to the LLM (no chunk pipeline)
+    and mirrors the example paper's structure exactly.
+    """
+    from app.services.file_parser import parse_file
+
+    def read_material(mat: Material) -> str:
+        try:
+            return parse_file(mat.file_path)
+        except Exception:
+            return ""
+
     materials_content = []
     for mid in material_ids:
         result = await db.execute(select(Material).where(Material.id == mid))
-        material = result.scalar_one_or_none()
-        if not material:
+        mat = result.scalar_one_or_none()
+        if not mat:
             raise ValueError(f"Material {mid} not found")
-        result = await db.execute(
-            select(Chunk).where(Chunk.material_id == mid).order_by(Chunk.chunk_index)
-        )
-        chunks = result.scalars().all()
-        if not chunks:
-            raise ValueError(f"No chunks found for material {mid}")
-        content = "\n\n".join([chunk.text for chunk in chunks])
-        materials_content.append(f"--- {material.title} ---\n{content}")
+        content = read_material(mat).strip()
+        if not content:
+            raise ValueError(f"No extractable text found in material {mid}")
+        materials_content.append(f"--- {mat.title} ---\n{content}")
     combined = "\n\n".join(materials_content)
 
     style_instruction = ""
-    if source_exam_id:
-        result = await db.execute(select(ExamPaper).where(ExamPaper.id == source_exam_id))
-        source = result.scalar_one_or_none()
-        if source:
-            style_instruction = (
-                f"\nUse this example exam as style reference:\n\n{source.content[:2000]}\n"
+    for ex_id in example_material_ids or []:
+        result = await db.execute(select(Material).where(Material.id == ex_id))
+        example = result.scalar_one_or_none()
+        if not example:
+            raise ValueError(f"Material {ex_id} not found")
+        example_content = read_material(example).strip()
+        if example_content:
+            style_instruction += (
+                f"\n\n===== EXAMPLE EXAM PAPER: {example.title} (REPLICATE ITS STRUCTURE EXACTLY) =====\n"
+                f"{example_content[:12000]}\n"
             )
 
-    messages = [
-        {
-            "role": "system",
-            "content": f"You are an expert educator creating exam questions. Based on the course materials, generate exactly 3 exam questions. Each question should test different topics, include marks allocation, a difficulty level (Easy/Medium/Hard), and a model answer.{style_instruction}Format each question in markdown with:\n## Question 1\n**Topic:** ...\n**Marks:** ...\n**Difficulty:** ...\n**Question:** ...\n**Model Answer:** ...",
-        },
-        {
-            "role": "user",
-            "content": f"Generate 3 exam questions based on these materials:\n\n{combined}",
-        },
-    ]
-    return await generate_with_student_config(messages, teacher_id, db)
+    papers: list[ExamPaper] = []
+    for paper_num in range(1, num_papers + 1):
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are an expert exam setter. Reproduce the example exam paper's structure EXACTLY: "
+                    "same section layout, same question types in the same order, same numbering style, "
+                    "same instruction wording, same marks notation, same headers/footer style. "
+                    "The output must look like it belongs to the same exam series.\n"
+                    "REQUIREMENTS:\n"
+                    "- The paper is worth EXACTLY 100 marks total; put the mark allocation per section/question "
+                    "exactly like the example does and make every mark add up to 100.\n"
+                    "- Base ALL question content strictly on the provided course materials.\n"
+                    "- Include an answer key section at the end (clearly separated).\n"
+                    "- Output the complete paper in plain text/markdown, ready to print."
+                    f"{style_instruction}"
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"COURSE MATERIALS:\n\n{combined}\n\n"
+                    f"Generate complete exam paper #{paper_num} of {num_papers} worth exactly 100 marks, "
+                    "in the EXACT structure and format of the example paper(s) above. "
+                    "Use DIFFERENT questions from the example and from any other paper."
+                ),
+            },
+        ]
+
+        paper_content = await generate_with_student_config(messages, teacher_id, db)
+
+        exam_paper = ExamPaper(
+            course_id="generated",
+            teacher_id=teacher_id,
+            paper_number=paper_num,
+            content=paper_content,
+            style_profile={"marks": 100, "example_ids": example_material_ids or []},
+        )
+        db.add(exam_paper)
+        await db.commit()
+        await db.refresh(exam_paper)
+        papers.append(exam_paper)
+
+        logger.info("Generated exam paper", course_id="generated", paper_number=paper_num, exam_paper_id=exam_paper.id)
+
+    return papers

@@ -1,0 +1,212 @@
+===== PAGE 16 =====
+Department of Advanced Science and Technology
+University of Computer Studies, Mandalay
+Fourth Year B. C. Se. / B. C. Tech.
+Semester I] Examination
+Android Programming (CST-4112)
+October, 2024
+
+Answer all questions. Time allowed: 3 hours
+
+(20 marks) |
+
+I. Choose correct Answer,
+and are required no matter which Android platform developed on. |
+
+(1) SDK tools are platform
+A. Dependent
+e B. Independent
+C. neither dependent nor independent
+1D. either dependent or independent
+(2) The XML code __ returns the hint that is displayed when the TextView is empty. |
+A. android.hint = “type here”
+B. android:text = “type here”
+C. android:inputType = “text” |
+(3) The _allow the user to select one or more options from a set. |
+A. radioButton
+B. checkbox
+C. spinner
+(4) A view that displays one child at a time and lets the user pick among them.
+A. Spinner
+B. Button
+
+rc C. EditText
+(5) The items in the spinner come from the __ associated with this view.
+A. Array
+B. Adapter
+C. View
+(6) The XML write for defining the hint which is displayed in the drop down menu.
+A. android:text = “hint”
+B. android:completionHint
+C. android:hint = “pick item”
+(7) Clients of the SeekBar can attacha__——_ to be notified of the user's actions
+A. SeekBar.OnSeekBarChangeListener
+B. SeekBar.OnSeckBarChange
+C. SeekBar.OnClickChangeListener
+(8) A (— its children into a single horizontal or vertical row.
+B. FrameLayout
+C. RelativeLayout
+
+a
+
+pick item”
+
+Page 1 of 5
+
+===== PAGE 17 =====
+9) There are ways to add elick event on button
+A J
+B. 2
+c. §
+) The __ action was used to display the phone dialer with the person filled if
+
+A. ACTION VIEW
+B. ACTION DIAL
+C. ACTION EDIT
+
+iT) A______ provides simple feedback about an operation in a small popup,
+
+B. Dialog |
+12) There should be no more than action buttons in a dialog. |
+| A. four
+Cc. one |
+13) The user cam touch the thumb and drag left or right to set the current progress level in seekPrar,
+| A. Troe
+| B. False
+The android system calls a series of lifecycle methods on the activi
+user mterface and other components as ‘
+A. onCreat()->onStart()->onResume()->onPause()->onStop()->onDestroy()
+B. onCreat()-~onStart()->onPause()->onResume()->onStop()->onDestroy()
+Cc. onCreat()->onStart()->onResume()->onStop()->onPause()->onDestroy()
+is 2 collection of properties that specify the look and format for a View or window,
+A. Theme
+B. style
+(16y What must be called in a thread to start processing messages with Looper? o-
+A. Looper.run()
+B. Looper prepare()
+C. Looper.start()
+D. Looper.execute()
+(17) Whieh of the following methods is used to get an instance of ConnectivityManager?
+A. Context. getSystemService(Context, CONNECTIVITY. MANAGER)
+B. Comtext.getSy stemService(Context NETWORK_SERVICE)
+i Comtext.getSy stemService(Context. WIFI_SERVICE)
+b Context.getSystemService(Context. CONNECTIVITY SERVICE)
+ass is required to display web content inside an Android app.
+A. WifiManager
+B. WebView
+
+(4) ty in which the user set wp the
+
+(iS) A
+
+(sty
+
+D, RSSManager
+(9% method in SQL iteOpenHelper is called when the database is first created.
+
+Page 2 of 5
+
+
+===== PAGE 18 =====
+onCreate()
+onUpgrade()
+onOpen()
+
+. getWritableDatabase()
+
+yoU>
+
+(20) Which of the following is NOT a valid SQLite data type?
+A. INTEGER
+B. REAL
+C. BOOLEAN
+D. TEXT
+(20 marks)
+
+Tl. Fill in the blank.
+of View and
+
+(1) The user interface for each Android application components is defined using
+
+ViewGroup objects.
+
+@ Q)A is a thin veneer over TextView that configures itself to be editable.
+(3) The XML attribute allows the text for the toggle button when it is unchecked.
+(4) Radio buttons are normally used together in a
+(5) The provide a quick way to select one value from a set.
+(6) A progress bar can also be made .
+(7) A seekBar is an extension of that adds a draggable thumb.
+(8) A defines the visual structure for a user interface.
+(9) The method is suitable when the user presses the “enter” key or presses down on the trackball.
+
+(10) An Activity is a(n) component that provides a screen with which users can interact in order
+
+to do something.
+(11) The android system calls method when the activity is first created.
+(12) The android studio uses the class to send the data between two activities.
+(13) The xml’s attribute can be used to define the maximum value the progress can take in
+
+progressBar.
+Cc (14) The distinguish the various substring.
+(15) The radio buttons are because they allow the user to select one option from a set.
+
+(16) The __ method in the Handler class is used to enqueue a Runnable object to the message
+queue to be processed,
+
+(17) The class provides APIs to query and monitor the state of network connectivity.
+
+(18) Themethod _ in NetworkInfo indicates whether network connectivity exists and can pass data.
+
+(19) To execute a raw SQL query, the method is used in SQLite,
+
+(20) The method —__ in SQLiteDatabase is used to create or open a writable database.
+
+II. (a) Write xml file for Figure-1 with white background LinearLayout and create “Cinema Ticketing”
+textView with “#A4E91E63” textColor, “34sp” textSize, “bold” textStyle which align in “center”.
+Then, create “Choose Movie Name”, “Choose Seat” and result textViews with “#A4E91E63”
+textColor, “24dp” textSize and “bold” textStyle, Also create two dropdown with “#E91E63”
+background color, And also create button with “#291163” background color, Also create string array
+for two dropdowns in strings.xml file as movie_name= [“My Boss, My Teacher”, “Gone With the
+wind”] and seat_name = [“A01”, 4901", “COI DOW E01 R014), (7 marks)
+
+Page 3 of 5
+
+
+===== PAGE 19 =====
+ual EE eT fe
+
+ba wa sdowtis, Ther shew
+(b) Write java code for Figure-1 use two Array Adapters for movie and seal droj i Shier
+
+; : : site de (he user chooses the movie and
+choosing movie’s name and seat number in result textView while the user cho '
+( ininrhee)
+
+f
+
+dropdowns and clicks the “Booking Ticket” button,
+
+Py iO 188
+
+Final Examination
+
+Cinema Ticketing
+
+Dear Customert
+Movie Name = My Bons, My Teaohar
+Seat = A0T
+
+Figure - 1
+
+IV. Create an Android app as shown in the following Figure-2.
+
+iis7@ oe
+
+Cancelled
+
+Figure-2
+
+Page 4 of 5
+pace 2 of 5
+
+
