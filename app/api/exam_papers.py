@@ -4,14 +4,14 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BadRequestException, NotFoundException
-from app.database import get_db
+from app.core.exceptions import NotFoundException
+from app.database import async_session, get_db
 from app.dependencies import require_role
-from app.models.exam_paper import ExamPaper
+from app.models.exam_paper import ExamPaper, ExamPaperJob
 from app.models.user import User, UserRole
 from app.services.exam_paper import (
     generate_exam_papers,
-    generate_full_papers,
+    run_exam_paper_job,
 )
 
 logger = structlog.get_logger()
@@ -82,29 +82,51 @@ async def generate_exam_papers_endpoint(
     }
 
 
-@router.post("/generate-questions")
+@router.post("/generate-questions", status_code=202)
 async def generate_questions(
     req: GenerateQuestionsRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
 ):
-    """Generate full 100-mark exam papers (num_papers, default 3) directly from the files."""
-    try:
-        papers = await generate_full_papers(
-            req.material_ids, req.example_material_ids, current_user.id, db, req.num_papers
-        )
-    except ValueError as e:
-        raise BadRequestException(str(e)) from e
+    """Queue full 100-mark exam paper generation (num_papers, default 3). Returns a job id."""
+    job = ExamPaperJob(
+        teacher_id=current_user.id,
+        status="pending",
+        num_papers=req.num_papers,
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    background_tasks.add_task(
+        run_exam_paper_job,
+        job.id,
+        req.material_ids,
+        req.example_material_ids,
+        req.num_papers,
+        async_session,
+    )
+    return {"job_id": job.id, "status": job.status}
+
+
+@router.get("/jobs/{job_id}")
+async def get_exam_paper_job(
+    job_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.teacher, UserRole.admin)),
+):
+    """Poll exam paper generation job status/results."""
+    result = await db.execute(select(ExamPaperJob).where(ExamPaperJob.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job or job.teacher_id != current_user.id:
+        raise NotFoundException("Job not found")
     return {
-        "papers": [
-            {
-                "id": p.id,
-                "paper_number": p.paper_number,
-                "content": p.content,
-                "created_at": p.created_at.isoformat(),
-            }
-            for p in papers
-        ]
+        "id": job.id,
+        "status": job.status,
+        "num_papers": job.num_papers,
+        "error": job.error,
+        "papers": job.results or [],
     }
 
 

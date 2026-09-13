@@ -23,7 +23,9 @@ export default function ExamPaper() {
   const [sourceIds, setSourceIds] = useState([]);
   const [exampleIds, setExampleIds] = useState([]);
   const [generating, setGenerating] = useState(false);
+  const [progress, setProgress] = useState('');
   const [papers, setPapers] = useState([]);
+  const [pastPapers, setPastPapers] = useState([]);
   const [activePaper, setActivePaper] = useState(0);
   const [error, setError] = useState('');
   const [loadingMaterials, setLoadingMaterials] = useState(true);
@@ -108,6 +110,8 @@ export default function ExamPaper() {
     }
   };
 
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
   const handleGenerate = async () => {
     if (sourceIds.length === 0) {
       setError('Select at least one source material.');
@@ -116,20 +120,50 @@ export default function ExamPaper() {
     setGenerating(true);
     setError('');
     setPapers([]);
+    setProgress('Queued...');
     try {
       const { data } = await api.post('/exam-papers/generate-questions', {
         material_ids: sourceIds,
         example_material_ids: exampleIds,
         num_papers: 3,
       });
-      setPapers(data.papers || []);
-      setActivePaper(0);
+      // Poll the job until done (avoids server timeouts on long LLM runs)
+      for (let i = 0; i < 240; i++) {
+        await sleep(3000);
+        const { data: job } = await api.get(`/exam-papers/jobs/${data.job_id}`);
+        if (job.status === 'done') {
+          setPapers(job.papers);
+          setActivePaper(0);
+          break;
+        }
+        if (job.status === 'failed') {
+          setError(job.error || 'Generation failed');
+          break;
+        }
+        if (job.status === 'running') {
+          setProgress(`Generating paper ${Math.min(Math.floor(i / 3) + 1, job.num_papers)} of ${job.num_papers}...`);
+        }
+      }
     } catch (err) {
       setError(errMsg(err));
     } finally {
       setGenerating(false);
+      setProgress('');
     }
   };
+
+  const fetchPastPapers = async () => {
+    try {
+      const { data } = await api.get('/exam-papers');
+      setPastPapers(data);
+    } catch {
+      // non-critical
+    }
+  };
+
+  useEffect(() => {
+    fetchPastPapers();
+  }, [papers]);
 
   const downloadPdf = () => {
     if (!papers[activePaper]?.content) return;
@@ -305,7 +339,7 @@ export default function ExamPaper() {
             {generating ? (
               <>
                 <Loader2 size={18} className="animate-spin" />
-                Generating 3 papers (this can take a few minutes)...
+                {progress || 'Generating...'}
               </>
             ) : (
               <>
@@ -362,6 +396,34 @@ export default function ExamPaper() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="mt-8 bg-surface-container-lowest rounded-xl border border-border-subtle p-6">
+        <h2 className="font-mono text-xs font-semibold uppercase tracking-wider text-on-surface mb-4">
+          My Saved Papers
+        </h2>
+        {pastPapers.length === 0 ? (
+          <p className="font-mono text-sm text-on-surface-variant py-4 text-center">No papers saved yet. Generated papers are saved here automatically.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {pastPapers.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => {
+                  setPapers([{ id: p.id, paper_number: p.paper_number, content: p.content, created_at: p.created_at }]);
+                  setActivePaper(0);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="text-left px-4 py-3 rounded-lg bg-surface-container border border-border-subtle hover:bg-surface-container-high transition-colors cursor-pointer"
+              >
+                <p className="font-mono text-xs text-on-surface-variant">
+                  Paper #{p.paper_number} — {p.created_at?.slice(0, 10)}
+                </p>
+                <p className="font-mono text-xs text-on-surface mt-1 line-clamp-2">{p.content?.slice(0, 120)}...</p>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       </div>
     </div>

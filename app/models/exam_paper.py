@@ -17,3 +17,20 @@ class ExamPaper(Base):
     content: Mapped[str] = mapped_column(Text)
     style_profile: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ExamPaperJob(Base):
+    __tablename__ = "exam_paper_jobs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(
+        String(20), default="pending"
+    )  # pending|running|done|failed
+    num_papers: Mapped[int] = mapped_column(Integer, default=3)
+    error: Mapped[str | None] = mapped_column(Text)
+    results: Mapped[list | None] = mapped_column(JSON)  # [{id, paper_number, content, created_at}]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

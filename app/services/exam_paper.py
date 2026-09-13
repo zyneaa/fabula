@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 import structlog
@@ -198,7 +199,7 @@ async def generate_full_papers(
         mat = result.scalar_one_or_none()
         if not mat:
             raise ValueError(f"Material {mid} not found")
-        content = read_material(mat).strip()
+        content = (await asyncio.to_thread(read_material, mat)).strip()
         if not content:
             raise ValueError(f"No extractable text found in material {mid}")
         materials_content.append(f"--- {mat.title} ---\n{content}")
@@ -210,7 +211,7 @@ async def generate_full_papers(
         example = result.scalar_one_or_none()
         if not example:
             raise ValueError(f"Material {ex_id} not found")
-        example_content = read_material(example).strip()
+        example_content = (await asyncio.to_thread(read_material, example)).strip()
         if example_content:
             style_instruction += (
                 f"\n\n===== EXAMPLE EXAM PAPER: {example.title} (REPLICATE ITS STRUCTURE EXACTLY) =====\n"
@@ -269,3 +270,42 @@ async def generate_full_papers(
         )
 
     return papers
+
+
+async def run_exam_paper_job(
+    job_id: int,
+    material_ids: list[int],
+    example_material_ids: list[int],
+    num_papers: int,
+    db_factory,
+) -> None:
+    """Background job runner: generates papers, stores them, updates the job status."""
+    from app.models.exam_paper import ExamPaperJob
+
+    async with db_factory() as db:
+        job_result = await db.execute(select(ExamPaperJob).where(ExamPaperJob.id == job_id))
+        job = job_result.scalar_one_or_none()
+        if not job:
+            return
+        job.status = "running"
+        await db.commit()
+        try:
+            papers = await generate_full_papers(
+                material_ids, example_material_ids, job.teacher_id, db, num_papers
+            )
+            job.status = "done"
+            job.results = [
+                {
+                    "id": p.id,
+                    "paper_number": p.paper_number,
+                    "content": p.content,
+                    "created_at": p.created_at.isoformat(),
+                }
+                for p in papers
+            ]
+            logger.info("Exam paper job completed", job_id=job_id, num_papers=len(papers))
+        except Exception as e:  # noqa: BLE001 — job runner must record any failure
+            job.status = "failed"
+            job.error = str(e)
+            logger.error("Exam paper job failed", job_id=job_id, error=str(e))
+        await db.commit()

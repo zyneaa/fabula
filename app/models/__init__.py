@@ -1,6 +1,6 @@
 from app.models.chat import Conversation, Message, MessageRole
 from app.models.department import Department
-from app.models.exam_paper import ExamPaper
+from app.models.exam_paper import ExamPaper, ExamPaperJob
 from app.models.llm_config import LLMConfig
 from app.models.material import Chunk, Material, MaterialStatus
 from app.models.note import Note
@@ -15,6 +15,7 @@ __all__ = [
     "Conversation",
     "Department",
     "ExamPaper",
+    "ExamPaperJob",
     "LLMConfig",
     "Material",
     "MaterialStatus",
