@@ -18,7 +18,6 @@ from app.core.rate_limit import setup_rate_limiting
 
 # Allow large multipart uploads (must run before the app handles requests)
 MultiPartParser.max_part_size = 50 * 1024 * 1024
-MultiPartParser.max_file_size = 50 * 1024 * 1024
 
 app = FastAPI(title="Fabula", version="0.1.0")
 
