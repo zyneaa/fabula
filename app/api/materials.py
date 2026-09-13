@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,6 +32,11 @@ class MaterialResponse(BaseModel):
     kind: str = "material"
     status: MaterialStatus
     uploaded_at: str
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _default_kind(cls, v):
+        return v or "material"
 
 
 class MaterialDetailResponse(MaterialResponse):
