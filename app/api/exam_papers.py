@@ -1,6 +1,6 @@
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,7 +28,7 @@ class GenerateExamPapersRequest(BaseModel):
 class GenerateQuestionsRequest(BaseModel):
     material_ids: list[int]
     example_material_ids: list[int] = []
-    num_papers: int = 3
+    num_papers: int = Field(default=3, ge=1, le=10)
 
 
 async def generate_exam_papers_background(

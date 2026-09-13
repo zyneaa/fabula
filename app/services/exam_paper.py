@@ -233,7 +233,8 @@ async def generate_full_papers(
                     "exactly like the example does and make every mark add up to 100.\n"
                     "- Base ALL question content strictly on the provided course materials.\n"
                     "- Include an answer key section at the end (clearly separated).\n"
-                    "- Output the complete paper in plain text/markdown, ready to print."
+                    "- Output the complete paper as valid Markdown (.md): # headings for sections, "
+                    "--- separators, **bold** marks notation. Ready to save as a .md file."
                     f"{style_instruction}"
                 ),
             },

@@ -27,6 +27,7 @@ export default function ExamPaper() {
   const [papers, setPapers] = useState([]);
   const [pastPapers, setPastPapers] = useState([]);
   const [activePaper, setActivePaper] = useState(0);
+  const [numPapers, setNumPapers] = useState(3);
   const [error, setError] = useState('');
   const [loadingMaterials, setLoadingMaterials] = useState(true);
   const [uploading, setUploading] = useState(null); // 'material' | 'example'
@@ -125,7 +126,7 @@ export default function ExamPaper() {
       const { data } = await api.post('/exam-papers/generate-questions', {
         material_ids: sourceIds,
         example_material_ids: exampleIds,
-        num_papers: 3,
+        num_papers: numPapers,
       });
       // Poll the job until done (avoids server timeouts on long LLM runs)
       for (let i = 0; i < 240; i++) {
@@ -141,7 +142,7 @@ export default function ExamPaper() {
           break;
         }
         if (job.status === 'running') {
-          setProgress(`Generating paper ${Math.min(Math.floor(i / 3) + 1, job.num_papers)} of ${job.num_papers}...`);
+          setProgress(`Generating paper ${Math.min(Math.floor(i / numPapers) + 1, numPapers)} of ${numPapers}...`);
         }
       }
     } catch (err) {
@@ -161,13 +162,33 @@ export default function ExamPaper() {
     }
   };
 
+  const removeSavedPaper = async (id) => {
+    setError('');
+    try {
+      await api.delete(`/exam-papers/${id}`);
+      setPastPapers((prev) => prev.filter((p) => p.id !== id));
+      setPapers((prev) => prev.filter((p) => p.id !== id));
+    } catch (err) {
+      setError(errMsg(err));
+    }
+  };
+
   useEffect(() => {
     fetchPastPapers();
   }, [papers]);
 
-  const downloadPdf = () => {
-    if (!papers[activePaper]?.content) return;
-    window.print();
+  const downloadMd = () => {
+    const paper = papers[activePaper];
+    if (!paper?.content) return;
+    const blob = new Blob([paper.content], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `exam-paper-${paper.paper_number || activePaper + 1}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -179,7 +200,7 @@ export default function ExamPaper() {
         </div>
         <div>
           <h1 className="font-display text-2xl font-bold text-on-surface">Exam Paper Generator</h1>
-          <p className="font-mono text-xs text-on-surface-variant">Generates 3 full papers (100 marks each) matching your example paper</p>
+          <p className="font-mono text-xs text-on-surface-variant">Full papers (100 marks each) matching your example paper</p>
         </div>
       </div>
 
@@ -189,8 +210,8 @@ export default function ExamPaper() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        <div className="lg:col-span-3 space-y-6">
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-surface-container-lowest rounded-xl border border-border-subtle p-6">
             <h2 className="font-mono text-xs font-semibold uppercase tracking-wider text-on-surface mb-1">
               Course Materials
@@ -330,6 +351,23 @@ export default function ExamPaper() {
               </div>
             )}
           </div>
+        </div>
+
+          <div className="bg-surface-container-lowest rounded-xl border border-border-subtle p-6">
+            <label className="block font-mono text-sm font-medium mb-2 text-on-surface-variant" htmlFor="num-papers">
+              Number of papers to generate (100 marks each)
+            </label>
+            <input
+              id="num-papers"
+              type="number"
+              min="1"
+              max="10"
+              value={numPapers}
+              onChange={(e) => setNumPapers(Math.max(1, Math.min(10, parseInt(e.target.value) || 3)))}
+              className="w-32 px-4 py-2.5 font-mono text-sm border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:border-primary"
+            />
+            <p className="font-mono text-[11px] text-on-surface-variant mt-1.5">Each paper = 1 LLM run. More papers = longer wait.</p>
+          </div>
 
           <button
             onClick={handleGenerate}
@@ -344,27 +382,36 @@ export default function ExamPaper() {
             ) : (
               <>
                 <FileText size={18} />
-                Generate 3 Papers (100 marks)
+                Generate {numPapers} Paper{numPapers > 1 ? 's' : ''} (100 marks)
               </>
             )}
           </button>
-        </div>
 
-        <div className="lg:col-span-2">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-surface-container-lowest rounded-xl border border-border-subtle p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-mono text-xs font-semibold uppercase tracking-wider text-on-surface">
+              Generated Papers
+              {papers[activePaper]?.created_at && (
+                <span className="ml-2 normal-case font-normal text-on-surface-variant">
+                  {new Date(papers[activePaper].created_at).toLocaleString()}
+                </span>
+              )}
+            </h2>
+            {papers.length > 0 && (
+              <button
+                onClick={downloadMd}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-xs font-semibold border border-solid cursor-pointer transition-colors bg-primary text-on-primary hover:opacity-90"
+              >
+                <Download size={14} />
+                Download .md
+              </button>
+            )}
+          </div>
           {papers.length > 0 ? (
-            <div className="bg-surface-container-lowest rounded-xl border border-border-subtle p-6">
-              <div className="flex items-center justify-between mb-4 print:hidden">
-                <h2 className="font-mono text-xs font-semibold uppercase tracking-wider text-on-surface">Generated Papers</h2>
-                <button
-                  onClick={downloadPdf}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-xs font-semibold border border-solid cursor-pointer transition-colors bg-primary text-on-primary hover:opacity-90"
-                >
-                  <Download size={14} />
-                  Save as PDF
-                </button>
-              </div>
+            <>
               {papers.length > 1 && (
-                <div className="flex gap-2 mb-4 print:hidden">
+                <div className="flex gap-2 mb-4">
                   {papers.map((p, i) => (
                     <button
                       key={p.id}
@@ -380,51 +427,63 @@ export default function ExamPaper() {
                   ))}
                 </div>
               )}
-              <div id="exam-paper-print" className="markdown-content prose-sm">
+              <div className="markdown-content prose-sm max-h-[600px] overflow-y-auto">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{papers[activePaper].content}</ReactMarkdown>
               </div>
-            </div>
+            </>
           ) : (
-            <div className="bg-surface-container-lowest rounded-xl border border-border-subtle p-6">
-              <h2 className="font-mono text-xs font-semibold uppercase tracking-wider text-on-surface mb-3">How it works</h2>
-              <ol className="font-mono text-xs text-on-surface-variant space-y-2 list-decimal list-inside">
-                <li>Upload course materials (content source) and an example exam paper (format source) — each in its own box.</li>
-                <li>Tick the files to use.</li>
-                <li>Generate — 3 full papers worth exactly 100 marks each, matching your example's structure, with answer keys.</li>
-                <li>Switch between papers with the tabs and save any of them as PDF.</li>
-              </ol>
+            <ol className="font-mono text-xs text-on-surface-variant space-y-2 list-decimal list-inside">
+              <li>Upload course materials (content source) and an example exam paper (format source) — each in its own box.</li>
+              <li>Tick the files to use.</li>
+              <li>Generate — full papers worth exactly 100 marks each, matching your example's structure, with answer keys.</li>
+              <li>Switch between papers with the tabs and download any of them as .md.</li>
+            </ol>
+          )}
+        </div>
+
+        <div className="bg-surface-container-lowest rounded-xl border border-border-subtle p-6">
+          <h2 className="font-mono text-xs font-semibold uppercase tracking-wider text-on-surface mb-4">
+            My Saved Papers
+          </h2>
+          {pastPapers.length === 0 ? (
+            <p className="font-mono text-sm text-on-surface-variant py-4 text-center">No papers saved yet. Generated papers are saved here automatically.</p>
+          ) : (
+            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+              {pastPapers.map((p) => (
+                <div
+                  key={p.id}
+                  onClick={async () => {
+                    setError('');
+                    try {
+                      const { data: full } = await api.get(`/exam-papers/${p.id}`);
+                      setPapers([{ id: full.id, paper_number: full.paper_number, content: full.content, created_at: full.created_at }]);
+                      setActivePaper(0);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    } catch (err) {
+                      setError(errMsg(err));
+                    }
+                  }}
+                  className="relative w-full text-left px-4 py-3 pr-10 rounded-lg bg-surface-container border border-border-subtle hover:bg-surface-container-high transition-colors cursor-pointer"
+                >
+                  <p className="font-mono text-xs text-on-surface-variant">
+                    Paper #{p.paper_number} — {p.created_at ? new Date(p.created_at).toLocaleString() : ''}
+                  </p>
+                  <p className="font-mono text-xs text-on-surface mt-1 line-clamp-2">{p.content?.slice(0, 120)}...</p>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); removeSavedPaper(p.id); }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-none border-none cursor-pointer p-1 text-on-surface-variant hover:text-error"
+                    title="Delete paper"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>
-      </div>
-
-      <div className="mt-8 bg-surface-container-lowest rounded-xl border border-border-subtle p-6">
-        <h2 className="font-mono text-xs font-semibold uppercase tracking-wider text-on-surface mb-4">
-          My Saved Papers
-        </h2>
-        {pastPapers.length === 0 ? (
-          <p className="font-mono text-sm text-on-surface-variant py-4 text-center">No papers saved yet. Generated papers are saved here automatically.</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {pastPapers.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => {
-                  setPapers([{ id: p.id, paper_number: p.paper_number, content: p.content, created_at: p.created_at }]);
-                  setActivePaper(0);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="text-left px-4 py-3 rounded-lg bg-surface-container border border-border-subtle hover:bg-surface-container-high transition-colors cursor-pointer"
-              >
-                <p className="font-mono text-xs text-on-surface-variant">
-                  Paper #{p.paper_number} — {p.created_at?.slice(0, 10)}
-                </p>
-                <p className="font-mono text-xs text-on-surface mt-1 line-clamp-2">{p.content?.slice(0, 120)}...</p>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+        </div>
+        </div>
       </div>
     </div>
   );
