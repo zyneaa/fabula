@@ -261,6 +261,11 @@ async def generate_full_papers(
         await db.refresh(exam_paper)
         papers.append(exam_paper)
 
-        logger.info("Generated exam paper", course_id="generated", paper_number=paper_num, exam_paper_id=exam_paper.id)
+        logger.info(
+            "Generated exam paper",
+            course_id="generated",
+            paper_number=paper_num,
+            exam_paper_id=exam_paper.id,
+        )
 
     return papers
