@@ -3,7 +3,9 @@ FROM python:3.14-slim
 WORKDIR /app
 
 # Install only the required system dependency.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Force HTTPS since plain HTTP (port 80) may be blocked on some networks.
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 

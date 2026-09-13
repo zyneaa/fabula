@@ -22,7 +22,17 @@ export default function Login() {
       await login(email, password);
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed');
+      if (!err.response) {
+        setError('Cannot reach the server. Check your connection and try again.');
+      } else if (err.response.status === 429) {
+        setError('Too many attempts. Please wait a minute and try again.');
+      } else if (err.response.status === 401) {
+        setError(err.response.data?.detail || 'Invalid email or password.');
+      } else if (err.response.status >= 500) {
+        setError('Server error. Please try again later.');
+      } else {
+        setError(err.response.data?.detail || 'Login failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
