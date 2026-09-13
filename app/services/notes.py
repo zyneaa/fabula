@@ -2,6 +2,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import NotFoundException
 from app.models.material import Chunk, Material, MaterialStatus
 from app.models.note import Note
 from app.services.llm import generate_with_student_config
@@ -26,7 +27,9 @@ async def generate_notes(
     materials = result.scalars().all()
 
     if not materials:
-        raise ValueError(f"No ready materials found for conversation {conversation_id}")
+        raise NotFoundException(
+            "No ready materials found for this conversation. Upload materials before generating notes."
+        )
 
     # Fetch all chunks from all materials
     all_chunks = []
@@ -38,7 +41,9 @@ async def generate_notes(
         all_chunks.extend(chunks)
 
     if not all_chunks:
-        raise ValueError(f"No chunks found for materials in conversation {conversation_id}")
+        raise NotFoundException(
+            "Materials have no processable content. Please re-upload your materials."
+        )
 
     # Combine chunks into content
     content = "\n\n".join([chunk.text for chunk in all_chunks])

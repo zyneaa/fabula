@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import NotFoundException
 from app.models.material import Chunk, Material
 from app.services.quiz import generate_quiz
 
@@ -100,7 +101,7 @@ async def test_generate_quiz_material_not_found(mock_db):
     mock_result.scalars.return_value.all.return_value = []
     mock_db.execute = AsyncMock(return_value=mock_result)
 
-    with pytest.raises(ValueError, match="No ready materials found for conversation"):
+    with pytest.raises(NotFoundException, match="No ready materials found"):
         await generate_quiz(999, 1, mock_db)
 
 
