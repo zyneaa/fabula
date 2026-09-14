@@ -1,6 +1,23 @@
 # Fabula Deployment Guide
-
 This guide covers deploying Fabula to your VPS using Docker and Docker Compose.
+abcd
+
+
+
+Step 1: open visual code or code
+
+Step 2: edit DEployment.md add abcd tesing ci cd pipeline and save ctrl+s
+
+Step 3: "testing ci cd pipeline" commit
+
+
+
+
+
+
+
+
+
 
 ## Prerequisites
 
