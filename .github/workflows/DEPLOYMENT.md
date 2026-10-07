@@ -1,8 +1,6 @@
 # Deploying Fabula to VPS
 abcddgdfhghkhj;l'
-hmgh;jihiiikkkkkkkkkkjhjjjjjjxbcfvhjjkdhfjkhfjkdhfdkjhfkj
-
-
+new code
 ## Prerequisites
 
 ### VPS Setup
