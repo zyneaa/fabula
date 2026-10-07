@@ -66,7 +66,9 @@ export default function ExamPaper() {
     form.append('file', file);
     form.append('kind', kind === 'example' ? 'example' : 'material');
     try {
-      const { data } = await api.post('/materials/upload', form);
+        const { data } = await api.post('/materials/upload', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
       if (data.kind === 'example') {
         setExampleMaterials((prev) => [data, ...prev]);
       } else {
